@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { ArrowLeft, SlidersHorizontal, Package, Heart, Star } from 'lucide-react';
+import BottleLoader from '@/components/BottleLoader';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -378,10 +379,7 @@ export default function CategoryPage() {
       {/* Products Grid */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {loading ? (
-          <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Loading products...</p>
-          </div>
+          <BottleLoader compact label="Selecting fragrances" />
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-16 h-16 mx-auto text-gray-400 mb-4" />

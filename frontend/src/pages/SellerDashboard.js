@@ -17,6 +17,7 @@ import SellerPerformance from './seller/SellerPerformance';
 import ReturnPolicySettings from './seller/ReturnPolicySettings';
 import StoreManagement from './seller/StoreManagement';
 import PayoutHistory from './seller/PayoutHistory';
+import BrandMark from '@/components/BrandMark';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -87,13 +88,8 @@ function DashboardHeader({ user, logout, navigate, title, subtitle }) {
               onClick={() => navigate('/')}
               data-testid="brand-logo"
             >
-              <Package className="w-8 h-8 text-blue-600" />
-              <div className="hidden sm:block">
-                <p className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                  Black Money
-                </p>
-                <p className="text-xs text-gray-500">{subtitle}</p>
-              </div>
+              <div className="hidden sm:block"><BrandMark subtitle={subtitle} /></div>
+              <div className="sm:hidden"><BrandMark compact /></div>
             </div>
           </div>
           

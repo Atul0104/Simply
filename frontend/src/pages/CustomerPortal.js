@@ -23,33 +23,35 @@ import ReturnRequest from './customer/ReturnRequest';
 import EnhancedProfilePage from './customer/EnhancedProfilePage';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import BrandMark from '@/components/BrandMark';
+import BottleLoader from '@/components/BottleLoader';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const categories = [
   { 
-    label: 'Men', 
+    label: 'For Him',
     icon: Shirt, 
     color: 'text-blue-600',
-    subcategories: ['T-Shirts', 'Shirts', 'Jeans', 'Trousers', 'Jackets', 'Suits', 'Ethnic Wear']
+    subcategories: ['Woody', 'Fresh', 'Aquatic', 'Spicy', 'Leather']
   },
   { 
-    label: 'Women', 
+    label: 'For Her',
     icon: Gem, 
     color: 'text-pink-500',
-    subcategories: ['Dresses', 'Tops', 'Sarees', 'Kurtis', 'Jeans', 'Skirts', 'Western Wear']
+    subcategories: ['Floral', 'Fruity', 'Amber', 'Gourmand', 'Musk']
   },
   { 
-    label: 'Kids', 
+    label: 'Unisex',
     icon: Baby, 
     color: 'text-amber-500',
-    subcategories: ['Boys Clothing', 'Girls Clothing', 'Infant Wear', 'School Uniforms', 'Party Wear']
+    subcategories: ['Clean', 'Citrus', 'Green', 'Aromatic', 'Niche']
   },
   { 
-    label: 'Accessories', 
+    label: 'Home Scents',
     icon: Star, 
     color: 'text-purple-600',
-    subcategories: ['Watches', 'Bags', 'Belts', 'Wallets', 'Sunglasses', 'Jewelry']
+    subcategories: ['Candles', 'Diffusers', 'Room Sprays', 'Incense']
   },
   { 
     label: 'New Arrivals', 
@@ -64,16 +66,16 @@ const categories = [
     subcategories: ['Clearance', 'Flash Sales', 'Bundle Deals']
   },
   { 
-    label: 'Winter Wear', 
+    label: 'Discovery Sets',
     icon: Snowflake, 
     color: 'text-sky-600',
-    subcategories: ['Sweaters', 'Hoodies', 'Jackets', 'Thermals', 'Scarves']
+    subcategories: ['For Him', 'For Her', 'Unisex', 'Build Your Own']
   },
   { 
-    label: 'Footwear', 
+    label: 'Gifting',
     icon: Footprints, 
     color: 'text-green-600',
-    subcategories: ['Sneakers', 'Formal Shoes', 'Sandals', 'Boots', 'Sports Shoes']
+    subcategories: ['Gift Sets', 'Miniatures', 'Under ₹2,000', 'Luxury Gifts']
   },
 ];
 
@@ -82,28 +84,28 @@ function ProductCard({ product, onClick }) {
   
   return (
     <motion.div
-      whileHover={{ y: -5 }}
+      whileHover={{ y: -3 }}
       transition={{ duration: 0.2 }}
     >
-      <Card className="cursor-pointer hover:shadow-lg transition-all duration-300 group" onClick={onClick} data-testid={`product-card-${product.id}`}>
+      <Card className="perfurm-product-card cursor-pointer transition-all duration-300 group overflow-hidden" onClick={onClick} data-testid={`product-card-${product.id}`}>
         <CardContent className="p-0">
-          <div className="aspect-square bg-gray-100 relative overflow-hidden">
+          <div className="h-40 sm:h-44 lg:h-48 bg-[#f2eee8] relative overflow-hidden p-3 sm:p-4">
             {product.images && product.images[0] ? (
-              <img src={product.images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+              <img src={product.images[0]} alt={product.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-[1.03] transition-transform duration-500" />
             ) : (
               <div className="w-full h-full flex items-center justify-center"><Package className="w-12 h-12 text-gray-400" /></div>
             )}
             {discount > 0 && (
-              <Badge className="absolute top-2 right-2 bg-red-500 animate-pulse">{discount}% OFF</Badge>
+              <Badge className="absolute top-2.5 right-2.5 bg-white/95 text-[#6f3b49] border border-[#6f3b49]/15 shadow-none text-[10px] tracking-wide">{discount}% OFF</Badge>
             )}
-            <button className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-2 shadow-lg hover:bg-red-50">
+            <button className="absolute top-2.5 left-2.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-full p-2 border border-stone-200 hover:text-[#6f3b49]">
               <Heart className="w-4 h-4 hover:text-red-500" />
             </button>
           </div>
-          <div className="p-3">
-            <h3 className="font-semibold truncate">{product.name}</h3>
-            <p className="text-sm text-gray-500 truncate">{product.category}</p>
-            <div className="flex items-center gap-2 mt-2">
+          <div className="p-3.5 sm:p-4">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-[#8b6f68] mb-1.5 truncate">{product.category}</p>
+            <h3 className="display-serif text-[15px] sm:text-base font-semibold leading-snug line-clamp-2 min-h-[40px]">{product.name}</h3>
+            <div className="flex flex-wrap items-baseline gap-x-2 mt-2.5">
               <span className="font-bold text-lg">₹{product.price}</span>
               {product.mrp > product.price && (
                 <span className="text-sm text-gray-400 line-through">₹{product.mrp}</span>
@@ -165,7 +167,7 @@ function SearchBar({ onClose }) {
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
         <Input
           ref={inputRef}
-          placeholder="Search for products, brands and more..."
+          placeholder="Search fragrances, notes and houses..."
           className="pl-10 pr-10"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -239,6 +241,7 @@ function SearchBar({ onClose }) {
 
 function HomePage() {
   const [products, setProducts] = useState([]);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [trending, setTrending] = useState([]);
   const [mostViewed, setMostViewed] = useState([]);
   const [allCategories, setAllCategories] = useState([]);
@@ -263,14 +266,21 @@ function HomePage() {
     show_footer: true
   });
   const [bestsellers, setBestsellers] = useState([]);
+  const [heroBanners, setHeroBanners] = useState([]);
+  const [offerCards, setOfferCards] = useState([]);
+  const [bankOffers, setBankOffers] = useState([]);
+  const [footerContent, setFooterContent] = useState(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const offers = [
-    { title: 'Flat 40% OFF on Winter Collection', subtitle: 'Limited time — stay warm in style', cta: 'Shop Now', image: 'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?w=1200' },
-    { title: 'Buy 2 Get 1 Free — T-Shirts', subtitle: 'Best sellers are back', cta: 'Grab Deal', image: 'https://images.unsplash.com/photo-1521335629791-ce4aec67dd47?w=1200' },
-    { title: 'New Arrivals — Up to 50% OFF', subtitle: 'Fresh designs just dropped', cta: 'Explore', image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=1200' },
+  const defaultOffers = [
+    { title: 'Find the scent that stays', subtitle: 'An edited collection of modern, memorable fragrance', cta: 'Explore fragrances', image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=1400', link: '/customer/category/all' },
+    { title: 'The art of the discovery set', subtitle: 'Try them slowly. Choose the one that feels like you.', cta: 'Discover sets', image: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?w=1400', link: '/customer/category/Discovery%20Sets' },
+    { title: 'A beautiful way to be remembered', subtitle: 'Considered fragrance gifts for every occasion', cta: 'Shop gifting', image: 'https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?w=1400', link: '/customer/category/Gifting' },
   ];
+  const offers = heroBanners.length > 0
+    ? heroBanners.map((banner) => ({ title: banner.title, subtitle: banner.subtitle, cta: banner.button_text, image: banner.image_url, link: banner.button_link || '/customer/category/all' }))
+    : defaultOffers;
 
   useEffect(() => {
     fetchProducts();
@@ -280,6 +290,9 @@ function HomePage() {
     fetchTicker();
     fetchVisibility();
     fetchBestsellers();
+    fetchHeroBanners();
+    fetchPromotions();
+    fetchFooterContent();
     loadCart();
     if (user) {
       fetchNotifications();
@@ -308,6 +321,8 @@ function HomePage() {
       setProducts(response.data);
     } catch (error) {
       console.error('Error fetching products:', error);
+    } finally {
+      setInitialLoading(false);
     }
   };
 
@@ -344,6 +359,37 @@ function HomePage() {
       setBestsellers(response.data);
     } catch (error) {
       console.error('Error fetching bestsellers:', error);
+    }
+  };
+
+  const fetchHeroBanners = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/hero-banners`);
+      setHeroBanners(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error('Error fetching hero banners:', error);
+    }
+  };
+
+  const fetchPromotions = async () => {
+    try {
+      const [offersResponse, banksResponse] = await Promise.all([
+        axios.get(`${API_URL}/offer-cards`),
+        axios.get(`${API_URL}/bank-offers`),
+      ]);
+      setOfferCards(Array.isArray(offersResponse.data) ? offersResponse.data : []);
+      setBankOffers(Array.isArray(banksResponse.data) ? banksResponse.data : []);
+    } catch (error) {
+      console.error('Error fetching promotions:', error);
+    }
+  };
+
+  const fetchFooterContent = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/footer-content`);
+      setFooterContent(response.data);
+    } catch (error) {
+      console.error('Error fetching footer content:', error);
     }
   };
 
@@ -404,11 +450,15 @@ function HomePage() {
 
   const unreadNotifications = notifications.filter(n => !n.is_read).length;
 
+  if (initialLoading) {
+    return <div className="min-h-screen perfurm-page"><BottleLoader label="Composing the Perfurm collection" /></div>;
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen perfurm-page">
       {/* Header */}
-      <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3">
+      <header className="bg-[#fffdf9]/95 backdrop-blur-md border-b border-stone-200/70 sticky top-0 z-50">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 py-2.5">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
@@ -463,10 +513,7 @@ function HomePage() {
                 whileHover={{ scale: 1.02 }}
                 data-testid="brand-logo"
               >
-                <Package className="w-7 h-7 text-blue-600" />
-                <span className="font-bold text-xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent hidden sm:block">
-                  Black Money
-                </span>
+                <BrandMark />
               </motion.div>
             </div>
             
@@ -608,14 +655,14 @@ function HomePage() {
       </header>
 
       {/* Sub-Header with Categories */}
-      <div className="bg-white border-b shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex gap-2 overflow-x-auto no-scrollbar">
+      {visibility.show_categories && <div className="bg-[#fffdf9] border-b border-stone-200/70">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 py-2.5">
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
             <Button
               variant={selectedCategory === null ? 'default' : 'outline'}
               size="sm"
               onClick={() => setSelectedCategory(null)}
-              className="flex-shrink-0"
+              className="flex-shrink-0 rounded-full px-4 shadow-none"
               data-testid="category-all"
             >
               <Home className="w-4 h-4 mr-1" /> All
@@ -629,7 +676,7 @@ function HomePage() {
                       <Button
                         variant={selectedCategory === cat.label ? 'default' : 'outline'}
                         size="sm"
-                        className="flex-shrink-0"
+                        className="flex-shrink-0 rounded-full px-4 shadow-none border-stone-200"
                         data-testid={`category-${cat.label.toLowerCase().replace(' ', '-')}`}
                       >
                         <Icon className={`w-4 h-4 mr-1 ${cat.color}`} /> {cat.label}
@@ -656,7 +703,7 @@ function HomePage() {
                   variant={selectedCategory === cat.label ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => goToCategory(cat.label)}
-                  className="flex-shrink-0"
+                  className="flex-shrink-0 rounded-full px-4 shadow-none border-stone-200"
                   data-testid={`category-${cat.label.toLowerCase().replace(' ', '-')}`}
                 >
                   <Icon className={`w-4 h-4 mr-1 ${cat.color}`} /> {cat.label}
@@ -665,11 +712,11 @@ function HomePage() {
             })}
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* Ticker */}
-      {tickerMessage && (
-        <div className="bg-gradient-to-r from-red-600 to-orange-600 text-white overflow-hidden">
+      {visibility.show_ticker && tickerMessage && (
+        <div className="bg-[#6f3b49] text-white overflow-hidden">
           <motion.div
             className="py-2 text-sm font-medium whitespace-nowrap"
             animate={{ x: ['100%', '-100%'] }}
@@ -681,8 +728,8 @@ function HomePage() {
       )}
 
       {/* Offers Slider */}
-      <section className="max-w-7xl mx-auto px-4 mt-4">
-        <div className="relative rounded-2xl overflow-hidden shadow-xl">
+      {visibility.show_hero_banner && <section className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 mt-5 sm:mt-7">
+        <div className="relative rounded-md overflow-hidden shadow-[0_18px_50px_rgba(55,40,35,0.12)]">
           <AnimatePresence mode="wait">
             <motion.div
               key={offerIndex}
@@ -690,14 +737,15 @@ function HomePage() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -100 }}
               transition={{ duration: 0.5 }}
-              className="relative h-64 md:h-80"
+              className="relative h-[220px] sm:h-[260px] lg:h-[285px]"
             >
               <img src={offers[offerIndex].image} alt="" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/70 to-transparent flex items-center">
-                <div className="p-8 text-white max-w-lg">
-                  <h2 className="text-3xl font-bold mb-2">{offers[offerIndex].title}</h2>
-                  <p className="mb-4">{offers[offerIndex].subtitle}</p>
-                  <Button className="bg-white text-black hover:bg-gray-100">
+              <div className="absolute inset-0 bg-gradient-to-r from-stone-950/80 via-stone-950/45 to-transparent flex items-center">
+                <div className="px-7 sm:px-12 py-6 text-white max-w-xl">
+                  <p className="text-xs uppercase tracking-[0.28em] mb-3 text-stone-200">Perfurm · Olfactory stories</p>
+                  <h2 className="display-serif text-3xl sm:text-4xl lg:text-[44px] leading-[1.05] font-semibold mb-3">{offers[offerIndex].title}</h2>
+                  <p className="mb-4 text-sm sm:text-base text-stone-200 max-w-md">{offers[offerIndex].subtitle}</p>
+                  <Button size="sm" onClick={() => navigate(offers[offerIndex].link)} className="bg-[#fffdf9] text-stone-900 hover:bg-white rounded-full px-5">
                     {offers[offerIndex].cta}
                   </Button>
                 </div>
@@ -707,13 +755,13 @@ function HomePage() {
           
           <button
             onClick={() => setOfferIndex((prev) => (prev - 1 + offers.length) % offers.length)}
-            className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 shadow-lg transition-all hover:scale-110"
+            className="hidden sm:block absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-1.5 transition-all"
           >
             <ChevronLeft className="w-6 h-6" />
           </button>
           <button
             onClick={() => setOfferIndex((prev) => (prev + 1) % offers.length)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-2 shadow-lg transition-all hover:scale-110"
+            className="hidden sm:block absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white rounded-full p-1.5 transition-all"
           >
             <ChevronRight className="w-6 h-6" />
           </button>
@@ -730,10 +778,10 @@ function HomePage() {
             ))}
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 py-8 sm:py-12">
         {user && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -745,20 +793,20 @@ function HomePage() {
         )}
         
         {/* Most Viewed Products */}
-        {mostViewed.length > 0 && (
-          <section className="mb-8">
+        {visibility.show_most_viewed && mostViewed.length > 0 && (
+          <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55 }} className="mb-10 sm:mb-14">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <Eye className="w-6 h-6 text-blue-600" />
-                <h2 className="text-2xl font-bold">Most Viewed</h2>
+                <h2 className="display-serif text-2xl sm:text-3xl font-semibold">Most Viewed</h2>
               </div>
               <Button variant="link" onClick={() => navigate('/customer/category/all')}>View All →</Button>
             </div>
-            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4">
+            <div className="flex gap-3.5 sm:gap-5 overflow-x-auto no-scrollbar pb-4">
               {(Array.isArray(mostViewed) ? mostViewed : [])
                 .slice(0, 6)
                 .map((product) => (
-                  <div key={product.id} className="min-w-[200px] max-w-[220] flex-shrink-0">
+                  <div key={product.id} className="min-w-[170px] sm:min-w-[205px] max-w-[220px] flex-shrink-0">
                   <ProductCard
                     product={product}
                     onClick={() => navigate(`/customer/product/${product.id}`)}
@@ -766,23 +814,71 @@ function HomePage() {
                 </div>
               ))}
             </div>
-          </section>
+          </motion.section>
         )}
 
         {/* Featured/Trending Products */}
-        {trending.length > 0 && (
-          <section className="mb-8">
+        {visibility.show_trending && trending.length > 0 && (
+          <section className="mb-10 sm:mb-14">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-6 h-6 text-orange-500" />
-                <h2 className="text-2xl font-bold">Trending Now</h2>
+                <h2 className="display-serif text-2xl sm:text-3xl font-semibold">Trending Now</h2>
               </div>
               <Button variant="link" onClick={() => setSelectedCategory(null)}>View All →</Button>
             </div>
-            <div className="flex gap-4 overflow-x-auto no-scrollbar pb-4">
+            <div className="flex gap-3.5 sm:gap-5 overflow-x-auto no-scrollbar pb-4">
               {(Array.isArray(trending) ? trending : []).slice(0, 6).map((product) => (
-                <div key={product.id} className="min-w-[200px] max-w-[220px] flex-shrink-0">
+                <div key={product.id} className="min-w-[170px] sm:min-w-[205px] max-w-[220px] flex-shrink-0">
                   <ProductCard product={product} onClick={() => navigate(`/customer/product/${product.id}`)} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {visibility.show_bestsellers && bestsellers.length > 0 && (
+          <section className="mb-10 sm:mb-14">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center gap-2">
+                <Star className="w-5 h-5 text-[#6f3b49]" />
+                <h2 className="display-serif text-2xl sm:text-3xl font-semibold">Bestsellers</h2>
+              </div>
+              <Button variant="link" onClick={() => navigate('/customer/category/all')}>View All →</Button>
+            </div>
+            <div className="flex gap-3.5 sm:gap-5 overflow-x-auto no-scrollbar pb-4">
+              {bestsellers.slice(0, 6).map((product) => (
+                <div key={product.id} className="min-w-[170px] sm:min-w-[205px] max-w-[220px] flex-shrink-0">
+                  <ProductCard product={product} onClick={() => navigate(`/customer/product/${product.id}`)} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {visibility.show_offer_cards && offerCards.length > 0 && (
+          <section className="mb-10 sm:mb-14">
+            <h2 className="display-serif text-2xl sm:text-3xl font-semibold mb-4">Curated offers</h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {offerCards.map((offer) => (
+                <button key={offer.id} onClick={() => offer.link_url && navigate(offer.link_url)} className="relative min-h-36 overflow-hidden rounded-sm text-left bg-[#6f3b49] text-white p-6 group">
+                  {offer.image_url && <img src={offer.image_url} alt="" className="absolute inset-0 w-full h-full object-cover opacity-35 group-hover:scale-105 transition-transform duration-500" />}
+                  <span className="relative block display-serif text-xl font-semibold">{offer.title}</span>
+                  <span className="relative block text-sm text-stone-200 mt-2">{offer.description}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {visibility.show_bank_offers && bankOffers.length > 0 && (
+          <section className="mb-10 sm:mb-14 border-y border-stone-200 py-5">
+            <div className="flex gap-4 overflow-x-auto no-scrollbar">
+              {bankOffers.map((offer) => (
+                <div key={offer.id} className="min-w-[260px] rounded-sm border border-stone-200 bg-[#fffdf9] px-5 py-4">
+                  <p className="text-[10px] uppercase tracking-[0.18em] text-[#8b6f68]">{offer.bank_name}</p>
+                  <p className="font-medium mt-1">{offer.offer_text}</p>
+                  {offer.min_order_amount > 0 && <p className="text-xs text-stone-500 mt-2">Minimum order ₹{offer.min_order_amount}</p>}
                 </div>
               ))}
             </div>
@@ -790,9 +886,9 @@ function HomePage() {
         )}
         
         {/* All Products */}
-        <section>
+        {visibility.show_new_arrivals && <section>
           <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold">
+            <h2 className="display-serif text-2xl sm:text-3xl font-semibold">
               {selectedCategory || 'All Products'}
             </h2>
             <Button variant="link" onClick={() => navigate('/customer/category/all')}>View All →</Button>
@@ -804,11 +900,10 @@ function HomePage() {
               <p className="text-gray-500 mb-4">No products found</p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 sm:gap-5 lg:gap-6">
               {(Array.isArray(products) ? products : [] ).slice(0, 8).map((product) => (
-                <div key=(product.id} className="min-w-[200px] max-w-[220] flex-shrink-0">
+                <div key={product.id}>
                 <ProductCard
-                  key={product.id}
                   product={product}
                   onClick={() => navigate(`/customer/product/${product.id}`)}
                 />
@@ -816,20 +911,19 @@ function HomePage() {
               ))}
             </div>
           )}
-        </section>
+        </section>}
       </div>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white mt-12">
-        <div className="max-w-7xl mx-auto px-4 py-12">
+      {visibility.show_footer && <footer className="bg-[#211c1b] text-white mt-12">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 py-12">
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <Package className="w-8 h-8 text-blue-400" />
-                <h3 className="font-bold text-xl">Black Money</h3>
+                <BrandMark inverse />
               </div>
               <p className="text-gray-400 text-sm">
-                Your trusted multi-seller marketplace for quality products at great prices.
+                {footerContent?.about_text || 'Fine fragrance, thoughtfully discovered. Find a scent that feels unmistakably yours.'}
               </p>
               {/* Social Media Icons */}
               <div className="flex gap-4 mt-4">
@@ -860,8 +954,8 @@ function HomePage() {
               <h4 className="font-semibold mb-4">Contact Us</h4>
               <ul className="space-y-2 text-sm text-gray-400">
                 <li>
-                  <a href="mailto:support@marketplace.com" className="hover:text-white transition-colors flex items-center gap-2">
-                    <Mail className="w-4 h-4" /> support@marketplace.com
+                  <a href={`mailto:${footerContent?.contact_email || 'care@perfurm.com'}`} className="hover:text-white transition-colors flex items-center gap-2">
+                    <Mail className="w-4 h-4" /> {footerContent?.contact_email || 'care@perfurm.com'}
                   </a>
                 </li>
                 <li>
@@ -890,10 +984,10 @@ function HomePage() {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2026 Black Money. All rights reserved.</p>
+            <p>&copy; 2026 Perfurm. All rights reserved.</p>
           </div>
         </div>
-      </footer>
+      </footer>}
     </div>
   );
 }
@@ -923,13 +1017,13 @@ function SearchResultsPage() {
   }, [query]);
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return <div className="min-h-screen perfurm-page"><BottleLoader label="Finding your next signature" /></div>;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 py-3">
+        <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 py-3">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
               <ChevronLeft />
@@ -941,7 +1035,7 @@ function SearchResultsPage() {
         </div>
       </header>
       
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 py-6">
         <h1 className="text-2xl font-bold mb-4">
           Search results for "{query}" ({products.length} items)
         </h1>

@@ -21,17 +21,22 @@ load_dotenv(ROOT_DIR / '.env')
 # MongoDB connection
 import certifi
 mongo_url = os.environ["MONGO_URL"]
+USE_MOCK_DB = os.environ.get("USE_MOCK_DB", "false").lower() == "true"
 
-client = AsyncIOMotorClient(
-    mongo_url,
-    tlsCAFile=certifi.where()
-)
+if USE_MOCK_DB:
+    from mongomock_motor import AsyncMongoMockClient
+    client = AsyncMongoMockClient()
+else:
+    client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
 
 db = client[os.environ.get("DB_NAME", "ecommerce_db")]
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY must be configured")
+ENABLE_DEMO_OTP = os.environ.get("ENABLE_DEMO_OTP", "false").lower() == "true"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 
@@ -634,12 +639,12 @@ class SellerStoreUpdate(BaseModel):
 class FooterContent(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = "footer_content"
-    about_text: str = "Your trusted multi-seller marketplace"
+    about_text: str = "Fine fragrance, thoughtfully discovered."
     facebook_url: Optional[str] = None
     instagram_url: Optional[str] = None
     twitter_url: Optional[str] = None
     youtube_url: Optional[str] = None
-    contact_email: str = "support@blackmoney.com"
+    contact_email: str = "care@perfurm.com"
     contact_phone: str = "+91 1234567890"
     address: Optional[str] = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -804,7 +809,7 @@ class HeroBannerUpdate(BaseModel):
 class SupportSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = "support_settings"
-    support_email: str = "support@blackmoney.com"
+    support_email: str = "care@perfurm.com"
     support_phone: str = "+91 1234567890"
     whatsapp_number: Optional[str] = None
     working_hours: str = "Mon-Sat: 10 AM - 6 PM"
@@ -863,7 +868,7 @@ def generate_tracking_id() -> str:
     """Generate unique tracking ID like Flipkart (e.g., FMP123456789)"""
     import random
     import string
-    prefix = "FMP"  # Fast Marketplace
+    prefix = "PFM"  # Perfurm
     numbers = ''.join(random.choices(string.digits, k=12))
     return f"{prefix}{numbers}"
 
@@ -920,6 +925,10 @@ async def update_seller_performance(seller_id: str):
 # ============== AUTH ROUTES ==============
 @api_router.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate):
+    if user_data.role not in (UserRole.CUSTOMER, UserRole.SELLER):
+        raise HTTPException(status_code=403, detail="This role cannot be self-registered")
+    if len(user_data.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     # Check if user exists
     existing = await db.users.find_one({"email": user_data.email})
     if existing:
@@ -1045,7 +1054,10 @@ async def send_otp(request: OtpRequest):
     # For now, log the OTP (DEMO MODE)
     logger.info(f"OTP for {phone} ({request.method}): {otp}")
     
-    return {"message": f"OTP sent via {request.method}", "demo_otp": otp}  # Remove demo_otp in production
+    response = {"message": f"OTP sent via {request.method}"}
+    if ENABLE_DEMO_OTP:
+        response["demo_otp"] = otp
+    return response
 
 @api_router.post("/auth/verify-otp-login", response_model=Token)
 async def verify_otp_login(request: OtpVerifyLogin):
@@ -1101,7 +1113,10 @@ async def forgot_password(request: ForgotPasswordRequest):
     # In production, send email with OTP
     logger.info(f"Password reset OTP for {request.email}: {otp}")
     
-    return {"message": "OTP sent to your email", "demo_otp": otp}  # Remove demo_otp in production
+    response = {"message": "OTP sent to your email"}
+    if ENABLE_DEMO_OTP:
+        response["demo_otp"] = otp
+    return response
 
 @api_router.post("/auth/verify-reset-otp")
 async def verify_reset_otp(request: VerifyResetOtp):
@@ -1424,35 +1439,72 @@ async def create_order(
     order_data: OrderCreate,
     user: Dict[str, Any] = Depends(require_role([UserRole.CUSTOMER]))
 ):
-    # Verify inventory
+    if not order_data.items:
+        raise HTTPException(status_code=400, detail="Order must contain at least one item")
+
+    # Rebuild every line from trusted catalog data. Client prices, names and seller IDs are ignored.
+    canonical_items = []
+    calculated_total = 0.0
     for item in order_data.items:
-        inventory = await db.inventory.find_one({"product_id": item["product_id"]})
-        if not inventory or inventory["quantity"] < item["quantity"]:
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for {item['name']}")
+        product_id = item.get("product_id")
+        quantity = item.get("quantity")
+        if not product_id or not isinstance(quantity, int) or quantity < 1:
+            raise HTTPException(status_code=400, detail="Each item requires a valid product and positive quantity")
+        product = await db.products.find_one({"id": product_id, "is_active": True}, {"_id": 0})
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product {product_id} not found")
+        inventory = await db.inventory.find_one({"product_id": product_id})
+        if not inventory or inventory["quantity"] < quantity:
+            raise HTTPException(status_code=400, detail=f"Insufficient stock for {product['name']}")
+        line = {
+            "product_id": product["id"],
+            "seller_id": product["seller_id"],
+            "name": product["name"],
+            "price": float(product["price"]),
+            "quantity": quantity,
+        }
+        for option in ("size", "color"):
+            if item.get(option):
+                line[option] = item[option]
+        canonical_items.append(line)
+        calculated_total += line["price"] * quantity
+
+    calculated_total = round(calculated_total, 2)
     
     # Calculate platform fee (2% of total amount)
-    fee_calculation = calculate_platform_fee(order_data.total_amount, 2.0)
+    fee_calculation = calculate_platform_fee(calculated_total, 2.0)
     
     order = Order(
         customer_id=user["id"],
         platform_fee_percentage=2.0,
         platform_fee_amount=fee_calculation["fee_amount"],
         seller_payout=fee_calculation["seller_payout"],
-        **order_data.model_dump()
+        items=canonical_items,
+        total_amount=calculated_total,
+        shipping_address=order_data.shipping_address
     )
     
-    await db.orders.insert_one(order.model_dump())
-    
-    # Update inventory
-    for item in order_data.items:
-        await db.inventory.update_one(
-            {"product_id": item["product_id"]},
+    # Reserve inventory before persisting the order.
+    reserved_items = []
+    for item in canonical_items:
+        result = await db.inventory.update_one(
+            {"product_id": item["product_id"], "quantity": {"$gte": item["quantity"]}},
             {"$inc": {"quantity": -item["quantity"]}}
         )
+        if result.modified_count != 1:
+            for reserved in reserved_items:
+                await db.inventory.update_one(
+                    {"product_id": reserved["product_id"]},
+                    {"$inc": {"quantity": reserved["quantity"]}}
+                )
+            raise HTTPException(status_code=409, detail=f"Stock changed for {item['name']}; please retry")
+        reserved_items.append(item)
+
+    await db.orders.insert_one(order.model_dump())
     
     # Group items by seller and create platform fee records
     seller_items = {}
-    for item in order_data.items:
+    for item in canonical_items:
         seller_id = item["seller_id"]
         if seller_id not in seller_items:
             seller_items[seller_id] = []
@@ -1477,13 +1529,14 @@ async def create_order(
         
         # Notify seller
         seller = await db.sellers.find_one({"id": seller_id})
-        notification = Notification(
-            user_id=seller["user_id"],
-            title="New Order Received",
-            message=f"Order #{order.id} - {len(items)} items | Payout: ₹{seller_fee_calc['seller_payout']} (After 2% platform fee)",
-            type="order_update"
-        )
-        await db.notifications.insert_one(notification.model_dump())
+        if seller:
+            notification = Notification(
+                user_id=seller["user_id"],
+                title="New Order Received",
+                message=f"Order #{order.id} - {len(items)} items | Payout: ₹{seller_fee_calc['seller_payout']} (After 2% platform fee)",
+                type="order_update"
+            )
+            await db.notifications.insert_one(notification.model_dump())
     
     # Notify customer
     customer_notification = Notification(
@@ -1502,12 +1555,21 @@ async def get_my_orders(user: Dict[str, Any] = Depends(get_current_user)):
         orders = await db.orders.find({"customer_id": user["id"]}, {"_id": 0}).to_list(1000)
     elif user["role"] == UserRole.SELLER.value:
         seller = await db.sellers.find_one({"user_id": user["id"]})
+        if not seller:
+            raise HTTPException(status_code=404, detail="Seller profile not found")
         orders = await db.orders.find(
             {"items.seller_id": seller["id"]},
             {"_id": 0}
         ).to_list(1000)
-    else:  # Admin
+    elif user["role"] == UserRole.ADMIN.value:
         orders = await db.orders.find({}, {"_id": 0}).to_list(1000)
+    elif user["role"] == UserRole.DELIVERY_PARTNER.value:
+        partner = await db.delivery_partners.find_one({"user_id": user["id"]})
+        if not partner:
+            raise HTTPException(status_code=404, detail="Delivery partner profile not found")
+        orders = await db.orders.find({"delivery_partner_id": partner["id"]}, {"_id": 0}).to_list(1000)
+    else:
+        raise HTTPException(status_code=403, detail="Not authorized")
     
     return orders
 
@@ -1520,6 +1582,14 @@ async def get_order(order_id: str, user: Dict[str, Any] = Depends(get_current_us
     # Authorization check
     if user["role"] == UserRole.CUSTOMER.value and order["customer_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="Not authorized")
+    if user["role"] == UserRole.SELLER.value:
+        seller = await db.sellers.find_one({"user_id": user["id"]})
+        if not seller or not any(item.get("seller_id") == seller["id"] for item in order.get("items", [])):
+            raise HTTPException(status_code=403, detail="Not authorized")
+    if user["role"] == UserRole.DELIVERY_PARTNER.value:
+        partner = await db.delivery_partners.find_one({"user_id": user["id"]})
+        if not partner or order.get("delivery_partner_id") != partner["id"]:
+            raise HTTPException(status_code=403, detail="Not authorized")
     
     return order
 
@@ -1532,6 +1602,10 @@ async def update_order_status(
     order = await db.orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if user["role"] == UserRole.SELLER.value:
+        seller = await db.sellers.find_one({"user_id": user["id"]})
+        if not seller or not any(item.get("seller_id") == seller["id"] for item in order.get("items", [])):
+            raise HTTPException(status_code=403, detail="Not authorized to update this order")
     
     await db.orders.update_one(
         {"id": order_id},
@@ -2809,9 +2883,17 @@ async def create_payment_order(
             detail="Payment gateway not configured. Please contact admin."
         )
     
+    if not payment_data.order_id:
+        raise HTTPException(status_code=400, detail="Internal order ID is required")
+    order = await db.orders.find_one({"id": payment_data.order_id, "customer_id": user["id"]})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("payment_status") == "paid":
+        raise HTTPException(status_code=409, detail="Order is already paid")
+
     try:
-        # Convert amount to paise (Razorpay requires amount in smallest currency unit)
-        amount_in_paise = int(payment_data.amount * 100)
+        # The charge is derived only from the trusted internal order.
+        amount_in_paise = int(round(float(order["total_amount"]) * 100))
         
         # Create Razorpay order
         razorpay_order = razorpay_client.order.create({
@@ -2820,6 +2902,10 @@ async def create_payment_order(
             "payment_capture": 1,  # Auto capture payment
             "notes": payment_data.notes or {}
         })
+        await db.orders.update_one(
+            {"id": order["id"], "customer_id": user["id"]},
+            {"$set": {"razorpay_order_id": razorpay_order["id"]}}
+        )
         
         return {
             "razorpay_order_id": razorpay_order["id"],
@@ -2843,6 +2929,14 @@ async def verify_payment(
             detail="Payment gateway not configured"
         )
     
+    order = await db.orders.find_one({
+        "id": verification_data.internal_order_id,
+        "customer_id": user["id"],
+        "razorpay_order_id": verification_data.razorpay_order_id,
+    })
+    if not order:
+        raise HTTPException(status_code=404, detail="Matching order not found")
+
     try:
         # Verify signature
         razorpay_client.utility.verify_payment_signature({
@@ -2853,7 +2947,7 @@ async def verify_payment(
         
         # Update order with payment details
         await db.orders.update_one(
-            {"id": verification_data.internal_order_id},
+            {"id": verification_data.internal_order_id, "customer_id": user["id"]},
             {
                 "$set": {
                     "payment_status": "paid",
@@ -2880,6 +2974,10 @@ async def get_payment_status(
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    if user["role"] == UserRole.CUSTOMER.value and order["customer_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if user["role"] not in (UserRole.CUSTOMER.value, UserRole.ADMIN.value):
+        raise HTTPException(status_code=403, detail="Not authorized")
     
     return {
         "order_id": order_id,
@@ -3168,7 +3266,7 @@ async def get_footer_content():
     content = await db.footer_content.find_one({"id": "footer_content"}, {"_id": 0})
     if not content:
         content = FooterContent().model_dump()
-        await db.footer_content.insert_one(content)
+        await db.footer_content.insert_one(dict(content))
     return content
 
 @api_router.put("/admin/footer-content")
@@ -3487,12 +3585,12 @@ async def mark_all_notifications_read(user: Dict[str, Any] = Depends(get_current
 async def get_categories_list():
     """Get list of all categories"""
     return [
-        "Men",
-        "Women", 
-        "Kids",
-        "Accessories",
-        "Footwear",
-        "Winter Wear",
+        "For Him",
+        "For Her",
+        "Unisex",
+        "Home Scents",
+        "Discovery Sets",
+        "Gifting",
         "Sale",
         "New Arrivals"
     ]
@@ -3504,7 +3602,7 @@ async def get_storefront_visibility():
     visibility = await db.storefront_visibility.find_one({"id": "storefront_visibility"}, {"_id": 0})
     if not visibility:
         visibility = StorefrontVisibility().model_dump()
-        await db.storefront_visibility.insert_one(visibility)
+        await db.storefront_visibility.insert_one(dict(visibility))
     return visibility
 
 @api_router.put("/admin/storefront-visibility")
@@ -3669,7 +3767,7 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_origins=os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -3691,4 +3789,18 @@ async def startup_db():
     await db.products.create_index("seller_id")
     await db.orders.create_index("customer_id")
     await db.notifications.create_index("user_id")
+    if USE_MOCK_DB and await db.products.count_documents({}) == 0:
+        now = datetime.now(timezone.utc)
+        preview_products = [
+            Product(seller_id="preview-atelier", name="Velvet Oud Eau de Parfum", description="A deep oud softened by rose absolute and warm amber.", category="For Him", price=2890, mrp=3490, sku="PFM001", images=["https://images.unsplash.com/photo-1541643600914-78b084683601?w=800"], specifications={"Notes": "Oud, rose, amber", "Concentration": "Eau de Parfum"}, sizes=["10 ml", "50 ml", "100 ml"], created_at=now, updated_at=now).model_dump(),
+            Product(seller_id="preview-atelier", name="Rose After Rain", description="Dewy petals, pink pepper and clean musk with a luminous finish.", category="For Her", price=2490, mrp=2990, sku="PFM002", images=["https://images.unsplash.com/photo-1594035910387-fea47794261f?w=800"], specifications={"Notes": "Rose, pink pepper, white musk", "Concentration": "Eau de Parfum"}, sizes=["10 ml", "50 ml", "100 ml"], created_at=now, updated_at=now).model_dump(),
+            Product(seller_id="preview-studio", name="The Signature Discovery Set", description="Six fragrances spanning citrus, floral, woods, amber, musk and oud.", category="Discovery Sets", price=1190, mrp=1490, sku="PFM003", images=["https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?w=800"], specifications={"Includes": "6 × 2 ml", "Format": "Spray vials"}, sizes=["6 × 2 ml"], created_at=now, updated_at=now).model_dump(),
+            Product(seller_id="preview-studio", name="Salt Skin Eau de Parfum", description="Mineral air, bergamot and sun-warmed skin in an effortless unisex scent.", category="Unisex", price=2690, mrp=3290, sku="PFM004", images=["https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=800"], specifications={"Notes": "Bergamot, sea salt, ambrette", "Concentration": "Eau de Parfum"}, sizes=["10 ml", "50 ml"], created_at=now, updated_at=now).model_dump(),
+        ]
+        await db.products.insert_many(preview_products)
+        await db.inventory.insert_many([
+            Inventory(product_id=product["id"], seller_id=product["seller_id"], quantity=25).model_dump()
+            for product in preview_products
+        ])
+        logger.info("Loaded Perfurm preview catalog")
     logger.info("Database indexes created")

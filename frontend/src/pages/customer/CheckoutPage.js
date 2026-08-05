@@ -283,7 +283,7 @@ export default function CheckoutPage() {
         key: key_id,
         amount: amount,
         currency: "INR",
-        name: "Black Money",
+        name: "Perfurm",
         description: `Order #${order.id}`,
         order_id: razorpay_order_id,
         handler: async function (response) {

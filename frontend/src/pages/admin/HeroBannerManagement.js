@@ -226,7 +226,7 @@ export default function HeroBannerManagement() {
               <Input
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                placeholder="Flat 40% OFF on Winter Collection"
+                placeholder="Find the scent that stays"
               />
             </div>
             <div>

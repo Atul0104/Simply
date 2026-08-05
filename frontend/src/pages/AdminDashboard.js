@@ -18,6 +18,7 @@ import PlatformSettings from './admin/PlatformSettings';
 import SellerPayouts from './admin/SellerPayouts';
 import StorefrontSettings from './admin/StorefrontSettings';
 import HeroBannerManagement from './admin/HeroBannerManagement';
+import BrandMark from '@/components/BrandMark';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -88,13 +89,8 @@ function AdminHeader({ user, logout, navigate }) {
               onClick={() => navigate('/')}
               data-testid="brand-logo"
             >
-              <Package className="w-8 h-8 text-purple-600" />
-              <div className="hidden sm:block">
-                <p className="font-bold text-lg bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                  Black Money
-                </p>
-                <p className="text-xs text-gray-500">Admin Portal</p>
-              </div>
+              <div className="hidden sm:block"><BrandMark subtitle="Admin Portal" /></div>
+              <div className="sm:hidden"><BrandMark compact /></div>
             </div>
           </div>
           
@@ -162,7 +158,7 @@ function AdminHome() {
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="mb-4">
           <h2 className="text-2xl font-bold">Platform Overview</h2>
-          <p className="text-gray-600">Manage your marketplace</p>
+          <p className="text-gray-600">Manage the Perfurm fragrance marketplace</p>
         </div>
 
         {stats && (

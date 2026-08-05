@@ -297,7 +297,7 @@ export default function AuthPage() {
           <CardContent className="space-y-4">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 space-y-2 hover:bg-white/20 transition-colors">
               <p className="font-semibold text-lg">👤 Admin</p>
-              <p className="font-mono text-sm">admin@marketplace.com</p>
+              <p className="font-mono text-sm">admin@perfurm.com</p>
               <p className="font-mono text-sm">admin123</p>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 space-y-2 hover:bg-white/20 transition-colors">
@@ -317,7 +317,7 @@ export default function AuthPage() {
         <Card className="shadow-2xl">
           <CardHeader className="text-center">
             <CardTitle className="text-2xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Welcome to Black Money
+              Welcome to Perfurm
             </CardTitle>
             <CardDescription>Sign in to your account or create new one</CardDescription>
           </CardHeader>

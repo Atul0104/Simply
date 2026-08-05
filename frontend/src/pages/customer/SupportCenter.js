@@ -213,7 +213,7 @@ export default function SupportCenter() {
             <div className="grid md:grid-cols-3 gap-4 text-sm">
               <div>
                 <p className="font-medium mb-1">Email</p>
-                <p className="text-gray-600">support@marketplace.com</p>
+                <p className="text-gray-600">care@perfurm.com</p>
               </div>
               <div>
                 <p className="font-medium mb-1">Phone</p>

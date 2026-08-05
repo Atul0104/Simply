@@ -38,7 +38,7 @@ async def seed_database():
     admin_id = str(uuid.uuid4())
     admin = {
         "id": admin_id,
-        "email": "admin@marketplace.com",
+        "email": "admin@perfurm.com",
         "password_hash": pwd_context.hash("admin123"),
         "role": "admin",
         "name": "Admin User",
@@ -47,7 +47,7 @@ async def seed_database():
         "is_active": True
     }
     await db.users.insert_one(admin)
-    print(f"✅ Created admin: admin@marketplace.com / admin123")
+    print(f"✅ Created admin: admin@perfurm.com / admin123")
     
     # Create Seller 1
     seller1_user_id = str(uuid.uuid4())
@@ -56,7 +56,7 @@ async def seed_database():
         "email": "seller1@example.com",
         "password_hash": pwd_context.hash("seller123"),
         "role": "seller",
-        "name": "Fashion Store Owner",
+        "name": "Atelier Fragrance Curator",
         "phone": "9876543210",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "is_active": True
@@ -67,11 +67,11 @@ async def seed_database():
     seller1 = {
         "id": seller1_id,
         "user_id": seller1_user_id,
-        "business_name": "Fashion Hub",
+        "business_name": "Atelier No. 9",
         "business_email": "seller1@example.com",
         "business_phone": "9876543210",
         "gst_number": "GST123456",
-        "address": "123 Fashion Street",
+        "address": "123 Garden Lane",
         "city": "Mumbai",
         "state": "Maharashtra",
         "pincode": "400001",
@@ -90,7 +90,7 @@ async def seed_database():
         "email": "seller2@example.com",
         "password_hash": pwd_context.hash("seller123"),
         "role": "seller",
-        "name": "Electronics Store Owner",
+        "name": "Independent Perfumer",
         "phone": "9876543211",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "is_active": True
@@ -101,7 +101,7 @@ async def seed_database():
     seller2 = {
         "id": seller2_id,
         "user_id": seller2_user_id,
-        "business_name": "Tech World",
+        "business_name": "Sillage Studio",
         "business_email": "seller2@example.com",
         "business_phone": "9876543211",
         "gst_number": "GST789012",
@@ -137,16 +137,16 @@ async def seed_database():
         {
             "id": str(uuid.uuid4()),
             "seller_id": seller1_id,
-            "name": "Premium Cotton T-Shirt",
-            "description": "Comfortable and stylish cotton t-shirt perfect for daily wear",
-            "category": "Clothing",
-            "price": 599,
-            "mrp": 999,
-            "sku": "FSH001",
-            "images": ["https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=400"],
-            "specifications": {"Material": "100% Cotton", "Fit": "Regular"},
-            "sizes": ["S", "M", "L", "XL", "XXL"],
-            "colors": [{"name": "Black", "hex": "#000000"}, {"name": "White", "hex": "#FFFFFF"}, {"name": "Navy", "hex": "#000080"}],
+            "name": "Velvet Oud Eau de Parfum",
+            "description": "A deep oud softened by rose absolute and warm amber.",
+            "category": "For Him",
+            "price": 2890,
+            "mrp": 3490,
+            "sku": "PFM001",
+            "images": ["https://images.unsplash.com/photo-1541643600914-78b084683601?w=600"],
+            "specifications": {"Concentration": "Eau de Parfum", "Notes": "Oud, rose, amber"},
+            "sizes": ["10 ml", "50 ml", "100 ml"],
+            "colors": [],
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -154,16 +154,16 @@ async def seed_database():
         {
             "id": str(uuid.uuid4()),
             "seller_id": seller1_id,
-            "name": "Slim Fit Jeans",
-            "description": "Trendy slim fit jeans with comfortable stretch fabric",
-            "category": "Clothing",
-            "price": 1299,
-            "mrp": 1999,
-            "sku": "FSH002",
-            "images": ["https://images.unsplash.com/photo-1542272604-787c3835535d?w=400"],
-            "specifications": {"Material": "Denim", "Fit": "Slim"},
-            "sizes": ["28", "30", "32", "34", "36"],
-            "colors": [{"name": "Blue", "hex": "#0000FF"}, {"name": "Black", "hex": "#000000"}],
+            "name": "Rose After Rain",
+            "description": "Dewy petals, pink pepper and clean musk with a luminous finish.",
+            "category": "For Her",
+            "price": 2490,
+            "mrp": 2990,
+            "sku": "PFM002",
+            "images": ["https://images.unsplash.com/photo-1594035910387-fea47794261f?w=600"],
+            "specifications": {"Concentration": "Eau de Parfum", "Notes": "Rose, pink pepper, white musk"},
+            "sizes": ["10 ml", "50 ml", "100 ml"],
+            "colors": [],
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -171,16 +171,16 @@ async def seed_database():
         {
             "id": str(uuid.uuid4()),
             "seller_id": seller1_id,
-            "name": "Casual Sneakers",
-            "description": "Comfortable everyday sneakers with premium cushioning",
-            "category": "Footwear",
-            "price": 1799,
-            "mrp": 2999,
-            "sku": "FSH003",
-            "images": ["https://images.unsplash.com/photo-1549298916-b41d501d3772?w=400"],
-            "specifications": {"Material": "Canvas"},
-            "sizes": ["UK 6", "UK 7", "UK 8", "UK 9", "UK 10"],
-            "colors": [{"name": "White", "hex": "#FFFFFF"}, {"name": "Black", "hex": "#000000"}, {"name": "Red", "hex": "#FF0000"}],
+            "name": "The Signature Discovery Set",
+            "description": "Six fragrances spanning citrus, floral, woods, amber, musk and oud.",
+            "category": "Discovery Sets",
+            "price": 1190,
+            "mrp": 1490,
+            "sku": "PFM003",
+            "images": ["https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?w=600"],
+            "specifications": {"Includes": "6 × 2 ml", "Format": "Spray vials"},
+            "sizes": ["6 × 2 ml"],
+            "colors": [],
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -188,16 +188,16 @@ async def seed_database():
         {
             "id": str(uuid.uuid4()),
             "seller_id": seller1_id,
-            "name": "Leather Jacket",
-            "description": "Genuine leather jacket with modern styling",
-            "category": "Clothing",
-            "price": 4999,
-            "mrp": 7999,
-            "sku": "FSH004",
-            "images": ["https://images.unsplash.com/photo-1551028719-00167b16eac5?w=400"],
-            "specifications": {"Material": "Genuine Leather", "Fit": "Slim"},
-            "sizes": ["S", "M", "L", "XL"],
-            "colors": [{"name": "Brown", "hex": "#8B4513"}, {"name": "Black", "hex": "#000000"}],
+            "name": "Hinoki & Tea Home Mist",
+            "description": "A quiet home fragrance of hinoki wood, steamed tea and incense.",
+            "category": "Home Scents",
+            "price": 1590,
+            "mrp": 1890,
+            "sku": "PFM004",
+            "images": ["https://images.unsplash.com/photo-1603006905003-be475563bc59?w=600"],
+            "specifications": {"Format": "Room spray", "Notes": "Hinoki, tea, incense"},
+            "sizes": ["100 ml"],
+            "colors": [],
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -209,14 +209,14 @@ async def seed_database():
         {
             "id": str(uuid.uuid4()),
             "seller_id": seller2_id,
-            "name": "Wireless Bluetooth Headphones",
-            "description": "Premium noise-canceling wireless headphones with 30hr battery",
-            "category": "Electronics",
-            "price": 2999,
-            "mrp": 4999,
-            "sku": "TECH001",
-            "images": ["https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=400"],
-            "specifications": {"Battery": "30 hours", "Connectivity": "Bluetooth 5.0", "Color": "Black"},
+            "name": "Salt Skin Eau de Parfum",
+            "description": "Mineral air, bergamot and sun-warmed skin in an effortless unisex scent.",
+            "category": "Unisex",
+            "price": 2690,
+            "mrp": 3290,
+            "sku": "PFM005",
+            "images": ["https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=600"],
+            "specifications": {"Concentration": "Eau de Parfum", "Notes": "Bergamot, sea salt, ambrette"},
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -224,14 +224,14 @@ async def seed_database():
         {
             "id": str(uuid.uuid4()),
             "seller_id": seller2_id,
-            "name": "Smartphone Stand",
-            "description": "Adjustable phone stand for desk and table use",
-            "category": "Accessories",
-            "price": 399,
-            "mrp": 699,
-            "sku": "TECH002",
-            "images": ["https://images.unsplash.com/photo-1607082349566-187342175e2f?w=400"],
-            "specifications": {"Material": "Aluminum", "Adjustable": "Yes", "Color": "Silver"},
+            "name": "Cedar Ember Candle",
+            "description": "Hand-poured wax scented with cedar, tobacco leaf and tonka bean.",
+            "category": "Home Scents",
+            "price": 1290,
+            "mrp": 1590,
+            "sku": "PFM006",
+            "images": ["https://images.unsplash.com/photo-1602874801006-e26a19c6b631?w=600"],
+            "specifications": {"Burn time": "45 hours", "Notes": "Cedar, tobacco, tonka"},
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -239,14 +239,14 @@ async def seed_database():
         {
             "id": str(uuid.uuid4()),
             "seller_id": seller2_id,
-            "name": "Wireless Charging Pad",
-            "description": "Fast wireless charging pad compatible with all Qi devices",
-            "category": "Accessories",
-            "price": 899,
-            "mrp": 1499,
-            "sku": "TECH003",
-            "images": ["https://images.unsplash.com/photo-1591290619762-83d0e3b5f010?w=400"],
-            "specifications": {"Charging Speed": "10W Fast Charge", "Compatibility": "Qi-enabled devices", "Color": "Black"},
+            "name": "Citrus Archive Eau de Toilette",
+            "description": "Bright neroli and bitter orange grounded by vetiver and pale woods.",
+            "category": "Unisex",
+            "price": 2190,
+            "mrp": 2690,
+            "sku": "PFM007",
+            "images": ["https://images.unsplash.com/photo-1615634260167-c8cdede054de?w=600"],
+            "specifications": {"Concentration": "Eau de Toilette", "Notes": "Neroli, orange, vetiver"},
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -254,14 +254,14 @@ async def seed_database():
         {
             "id": str(uuid.uuid4()),
             "seller_id": seller2_id,
-            "name": "USB-C Hub",
-            "description": "7-in-1 USB-C hub with HDMI, USB 3.0, and card readers",
-            "category": "Accessories",
-            "price": 1499,
-            "mrp": 2499,
-            "sku": "TECH004",
-            "images": ["https://images.unsplash.com/photo-1625948515291-69613efd103f?w=400"],
-            "specifications": {"Ports": "7-in-1", "Compatibility": "USB-C devices", "Color": "Gray"},
+            "name": "Ritual Miniature Gift Set",
+            "description": "Four signature extrait miniatures presented in a keepsake box.",
+            "category": "Gifting",
+            "price": 3490,
+            "mrp": 3990,
+            "sku": "PFM008",
+            "images": ["https://images.unsplash.com/photo-1610461888750-10bfc601b874?w=600"],
+            "specifications": {"Includes": "4 × 7.5 ml", "Presentation": "Gift box"},
             "is_active": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
@@ -324,7 +324,7 @@ async def seed_database():
     client.close()
     print("\n🎉 Database seeding completed successfully!")
     print("\n📋 Test Accounts:")
-    print("  Admin:    admin@marketplace.com / admin123")
+    print("  Admin:    admin@perfurm.com / admin123")
     print("  Seller 1: seller1@example.com / seller123")
     print("  Seller 2: seller2@example.com / seller123")
     print("  Customer: customer@example.com / customer123")

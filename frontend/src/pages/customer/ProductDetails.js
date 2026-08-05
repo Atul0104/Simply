@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ArrowLeft, Package, Heart, Star, Share2, MapPin, Truck, RotateCcw, Shield, ChevronRight, Plus, Minus, Zap, Store, MessageCircle, Check, X, ShoppingCart, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import BottleLoader from '@/components/BottleLoader';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -183,7 +184,7 @@ export default function ProductDetails() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+    return <div className="min-h-screen perfurm-page"><BottleLoader label="Unveiling your fragrance" /></div>;
   }
 
   if (!product) {
