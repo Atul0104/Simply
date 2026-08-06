@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Heart, ShoppingCart, Trash2, Package } from 'lucide-react';
 import { toast } from 'sonner';
+import PerfumeRecommendations from '@/components/PerfumeRecommendations';
 
 export default function WishlistPage() {
   const [wishlist, setWishlist] = useState([]);
@@ -61,13 +62,16 @@ export default function WishlistPage() {
         </div>
 
         {wishlist.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <Heart className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500 mb-4">Your wishlist is empty</p>
-              <Button onClick={() => navigate('/')}>Start Shopping</Button>
-            </CardContent>
-          </Card>
+          <div>
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Heart className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-500 mb-4">Your wishlist is empty</p>
+                <Button onClick={() => navigate('/')}>Start Shopping</Button>
+              </CardContent>
+            </Card>
+            <PerfumeRecommendations title="Popular perfumes for your wishlist" />
+          </div>
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {wishlist.map((product) => {

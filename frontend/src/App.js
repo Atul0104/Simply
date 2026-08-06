@@ -1,71 +1,54 @@
-import { useState, useEffect } from "react";
-import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import CustomerPortal from "@/pages/CustomerPortal";
-import SellerDashboard from "@/pages/SellerDashboard";
-import AdminDashboard from "@/pages/AdminDashboard";
-import DeliveryPartnerDashboard from "@/pages/DeliveryPartnerDashboard";
-import AuthPage from "@/pages/AuthPage";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { lazy, Suspense } from 'react';
+import '@/App.css';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import Seo from '@/components/Seo';
+import BottleLoader from '@/components/BottleLoader';
+import AppErrorBoundary from '@/components/AppErrorBoundary';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+
+const CustomerPortal = lazy(() => import('@/pages/CustomerPortal'));
+const AdminDashboard = lazy(() => import('@/pages/AdminDashboard'));
+const AuthPage = lazy(() => import('@/pages/AuthPage'));
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 
 function PrivateRoute({ children, allowedRoles }) {
   const { user } = useAuth();
-  
-  if (!user) {
-    return <Navigate to="/auth" />;
-  }
-  
-  if (allowedRoles && !allowedRoles.includes(user.role)) {
-    return <Navigate to="/" />;
-  }
-  
-  return children;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (allowedRoles && !allowedRoles.includes(user.role)) return <Navigate to="/" replace />;
+  return <><Seo title="Account portal" noindex />{children}</>;
 }
 
 function AppRoutes() {
   const { user } = useAuth();
-  
   return (
-    <Routes>
-      <Route path="/auth" element={<AuthPage />} />
-      <Route path="/" element={
-        user ? (
-          user.role === 'admin' ? <Navigate to="/admin" /> :
-          user.role === 'seller' ? <Navigate to="/seller" /> :
-          user.role === 'delivery_partner' ? <Navigate to="/delivery" /> :
-          <CustomerPortal />
-        ) : <CustomerPortal />
-      } />
-      <Route path="/customer/*" element={<CustomerPortal />} />
-      <Route path="/seller/*" element={
-        <PrivateRoute allowedRoles={['seller']}>
-          <SellerDashboard />
-        </PrivateRoute>
-      } />
-      <Route path="/admin/*" element={
-        <PrivateRoute allowedRoles={['admin']}>
-          <AdminDashboard />
-        </PrivateRoute>
-      } />
-      <Route path="/delivery/*" element={
-        <PrivateRoute allowedRoles={['delivery_partner']}>
-          <DeliveryPartnerDashboard />
-        </PrivateRoute>
-      } />
-    </Routes>
-  );
-}
-
-function App() {
-  return (
-    <div className="App">
-      <BrowserRouter>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </BrowserRouter>
+    <div id="main-content" tabIndex="-1" className="outline-none">
+      <Suspense fallback={<BottleLoader label="Preparing Perfurm" />}>
+        <Routes>
+          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/" element={
+            user ? (
+              user.role === 'admin' ? <Navigate to="/admin" replace /> :
+              <CustomerPortal />
+            ) : <CustomerPortal />
+          } />
+          <Route path="/customer/*" element={<CustomerPortal />} />
+          <Route path="/admin/*" element={<PrivateRoute allowedRoles={['admin']}><AdminDashboard /></PrivateRoute>} />
+          <Route path="/seller/*" element={<Navigate to="/" replace />} />
+          <Route path="/delivery/*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <div className="App">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+      <AppErrorBoundary>
+        <BrowserRouter><AuthProvider><AppRoutes /></AuthProvider></BrowserRouter>
+      </AppErrorBoundary>
+    </div>
+  );
+}

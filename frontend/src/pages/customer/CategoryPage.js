@@ -9,29 +9,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { ArrowLeft, SlidersHorizontal, Package, Heart, Star } from 'lucide-react';
 import BottleLoader from '@/components/BottleLoader';
+import Seo from '@/components/Seo';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const sortOptions = [
-  { value: 'recommended', label: 'Recommended' },
-  { value: 'price_low_high', label: 'Price: Low to High' },
-  { value: 'price_high_low', label: 'Price: High to Low' },
+  { value: 'relevance', label: 'Recommended' },
+  { value: 'popularity', label: 'Popularity' },
+  { value: 'bestselling', label: 'Bestselling' },
+  { value: 'price_low', label: 'Price: Low to High' },
+  { value: 'price_high', label: 'Price: High to Low' },
   { value: 'discount', label: 'Highest Discount' },
   { value: 'rating', label: 'Customer Rating' },
-  { value: 'newest', label: 'Newest First' }
+  { value: 'newest', label: 'Newest First' },
+  { value: 'name_asc', label: 'Name: A to Z' },
+  { value: 'name_desc', label: 'Name: Z to A' }
 ];
 
-const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-const colors = [
-  { name: 'Black', value: 'black', hex: '#000000' },
-  { name: 'White', value: 'white', hex: '#FFFFFF' },
-  { name: 'Red', value: 'red', hex: '#EF4444' },
-  { name: 'Blue', value: 'blue', hex: '#3B82F6' },
-  { name: 'Green', value: 'green', hex: '#10B981' },
-  { name: 'Yellow', value: 'yellow', hex: '#F59E0B' },
-  { name: 'Pink', value: 'pink', hex: '#EC4899' },
-  { name: 'Purple', value: 'purple', hex: '#A855F7' },
-];
+const sizes = ['10 ml', '30 ml', '50 ml', '75 ml', '100 ml', '150 ml'];
+const fragranceFamilies = ['Floral', 'Woody', 'Fresh', 'Citrus', 'Amber', 'Musk', 'Aquatic', 'Gourmand'];
 
 function ProductCard({ product, onClick }) {
   const discount = Math.round(((product.mrp - product.price) / product.mrp) * 100);
@@ -44,7 +40,7 @@ function ProductCard({ product, onClick }) {
             <img 
               src={product.images[0]} 
               alt={product.name} 
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" 
+              className="w-full h-full object-contain mix-blend-multiply p-3 sm:p-5 group-hover:scale-105 transition-transform duration-500"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -56,6 +52,7 @@ function ProductCard({ product, onClick }) {
               {discount}% OFF
             </Badge>
           )}
+          {product.is_coming_soon && <Badge className="absolute bottom-2 left-2 bg-violet-700">Coming Soon</Badge>}
           <button 
             className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity bg-white rounded-full p-2 shadow-lg"
             onClick={(e) => {
@@ -71,7 +68,7 @@ function ProductCard({ product, onClick }) {
           <p className="text-sm text-gray-500 truncate">{product.category}</p>
           <div className="flex items-center gap-1 mt-1">
             <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-            <span className="text-xs text-gray-600">4.2</span>
+            <span className="text-xs text-gray-600">{Number(product.average_rating || 0).toFixed(1)}</span>
           </div>
           <div className="flex items-center gap-2 mt-2">
             <span className="font-bold text-lg">₹{product.price}</span>
@@ -93,103 +90,50 @@ export default function CategoryPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
-  const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [totalProducts, setTotalProducts] = useState(0);
+  const [fetchError, setFetchError] = useState('');
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   
   // Filters state
-  const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'recommended');
-  const [selectedSizes, setSelectedSizes] = useState([]);
-  const [selectedColors, setSelectedColors] = useState([]);
-  const [priceRange, setPriceRange] = useState([0, 10000]);
-  const [minRating, setMinRating] = useState(0);
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') || 'relevance');
+  const [selectedSizes, setSelectedSizes] = useState(searchParams.getAll('size'));
+  const [selectedFamilies, setSelectedFamilies] = useState(searchParams.getAll('fragrance_family'));
+  const [priceRange, setPriceRange] = useState([Number(searchParams.get('min_price') || 0), Number(searchParams.get('max_price') || 10000)]);
+  const [minRating, setMinRating] = useState(Number(searchParams.get('min_rating') || 0));
 
   useEffect(() => {
-    fetchProducts();
-  }, [category]);
-
-  useEffect(() => {
-    applyFiltersAndSort();
-  }, [products, sortBy, selectedSizes, selectedColors, priceRange, minRating]);
+    const timer = setTimeout(fetchProducts, 250);
+    return () => clearTimeout(timer);
+  }, [category, sortBy, selectedSizes, selectedFamilies, priceRange, minRating]);
 
   const fetchProducts = async () => {
     setLoading(true);
+    setFetchError('');
     try {
-      const response = await axios.get(`${API_URL}/products`, {
-        params: { category: category }
+      const params = new URLSearchParams();
+      if (category?.toLowerCase() === 'coming soon') params.set('coming_soon', 'true');
+      else if (category && category.toLowerCase() !== 'all') params.append('category', category);
+      selectedSizes.forEach(value => params.append('size', value));
+      selectedFamilies.forEach(value => params.append('fragrance_family', value));
+      if (priceRange[0] > 0) params.set('min_price', priceRange[0]);
+      if (priceRange[1] < 10000) params.set('max_price', priceRange[1]);
+      if (minRating > 0) params.set('min_rating', minRating);
+      params.set('sort', sortBy);
+      params.set('page_size', '48');
+      setSearchParams(params, { replace: true });
+      const response = await axios.get(`${API_URL}/catalog/products`, {
+        params,
       });
-      setProducts(response.data);
+      setFilteredProducts(response.data.items || []);
+      setTotalProducts(response.data.total || 0);
     } catch (error) {
       console.error('Error fetching products:', error);
+      setFetchError(error.response?.data?.detail || 'Unable to load this collection. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  const applyFiltersAndSort = () => {
-    let filtered = [...products];
-
-    // Apply filters
-    if (selectedSizes.length > 0) {
-      // Filter by size (assuming size is in specifications)
-      filtered = filtered.filter(p => 
-        selectedSizes.some(size => 
-          p.specifications?.size?.includes(size) || 
-          p.specifications?.Size?.includes(size)
-        )
-      );
-    }
-
-    if (selectedColors.length > 0) {
-      // Filter by color
-      filtered = filtered.filter(p =>
-        selectedColors.some(color =>
-          p.name.toLowerCase().includes(color) ||
-          p.description.toLowerCase().includes(color) ||
-          p.specifications?.color?.toLowerCase().includes(color) ||
-          p.specifications?.Color?.toLowerCase().includes(color)
-        )
-      );
-    }
-
-    // Filter by price range
-    filtered = filtered.filter(p => p.price >= priceRange[0] && p.price <= priceRange[1]);
-
-    // Filter by rating (mock for now)
-    if (minRating > 0) {
-      // In real app, this would filter based on actual ratings
-      filtered = filtered.filter(() => Math.random() > 0.3); // Mock filter
-    }
-
-    // Apply sorting
-    switch (sortBy) {
-      case 'price_low_high':
-        filtered.sort((a, b) => a.price - b.price);
-        break;
-      case 'price_high_low':
-        filtered.sort((a, b) => b.price - a.price);
-        break;
-      case 'discount':
-        filtered.sort((a, b) => {
-          const discountA = ((a.mrp - a.price) / a.mrp) * 100;
-          const discountB = ((b.mrp - b.price) / b.mrp) * 100;
-          return discountB - discountA;
-        });
-        break;
-      case 'rating':
-        // Mock sorting by rating
-        filtered.sort(() => Math.random() - 0.5);
-        break;
-      case 'newest':
-        filtered.reverse();
-        break;
-      default: // recommended
-        // Keep original order
-        break;
-    }
-
-    setFilteredProducts(filtered);
   };
 
   const toggleSize = (size) => {
@@ -198,29 +142,30 @@ export default function CategoryPage() {
     );
   };
 
-  const toggleColor = (color) => {
-    setSelectedColors(prev =>
-      prev.includes(color) ? prev.filter(c => c !== color) : [...prev, color]
+  const toggleFamily = (family) => {
+    setSelectedFamilies(prev =>
+      prev.includes(family) ? prev.filter(item => item !== family) : [...prev, family]
     );
   };
 
   const clearFilters = () => {
     setSelectedSizes([]);
-    setSelectedColors([]);
+    setSelectedFamilies([]);
     setPriceRange([0, 10000]);
     setMinRating(0);
-    setSortBy('recommended');
+    setSortBy('relevance');
   };
 
-  const activeFiltersCount = selectedSizes.length + selectedColors.length + (minRating > 0 ? 1 : 0);
+  const activeFiltersCount = selectedSizes.length + selectedFamilies.length + (minRating > 0 ? 1 : 0) + (priceRange[0] > 0 || priceRange[1] < 10000 ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <Seo title={category === 'all' ? 'All fragrances' : category} description={`Shop ${category === 'all' ? 'perfume and fragrance' : category} at Perfurm.`} canonicalPath={`/customer/category/${encodeURIComponent(category)}`} />
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 sm:gap-3 min-w-0">
               <Button
                 variant="ghost"
                 size="icon"
@@ -229,17 +174,17 @@ export default function CategoryPage() {
               >
                 <ArrowLeft className="w-5 h-5" />
               </Button>
-              <div>
-                <h1 className="text-2xl font-bold">{category}</h1>
+              <div className="min-w-0">
+                <h1 className="text-lg sm:text-2xl font-bold truncate">{category}</h1>
                 <p className="text-sm text-gray-500">
-                  {filteredProducts.length} {filteredProducts.length === 1 ? 'item' : 'items'}
+                  {totalProducts} {totalProducts === 1 ? 'item' : 'items'}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px]" data-testid="sort-select">
+                <SelectTrigger className="w-[118px] sm:w-[180px]" data-testid="sort-select">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
@@ -306,27 +251,20 @@ export default function CategoryPage() {
                       </div>
                     </div>
 
-                    {/* Color */}
+                    {/* Fragrance family */}
                     <div>
-                      <h3 className="font-semibold mb-3">Color</h3>
-                      <div className="grid grid-cols-4 gap-3">
-                        {colors.map(color => (
-                          <button
-                            key={color.value}
-                            onClick={() => toggleColor(color.value)}
-                            className={`relative w-12 h-12 rounded-full border-2 transition-all ${
-                              selectedColors.includes(color.value)
-                                ? 'border-blue-500 ring-2 ring-blue-200'
-                                : 'border-gray-300'
-                            }`}
-                            style={{ backgroundColor: color.hex }}
-                            title={color.name}
-                            data-testid={`color-${color.value}`}
+                      <h3 className="font-semibold mb-3">Fragrance family</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {fragranceFamilies.map(family => (
+                          <Button
+                            key={family}
+                            variant={selectedFamilies.includes(family) ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => toggleFamily(family)}
+                            data-testid={`family-${family.toLowerCase()}`}
                           >
-                            {color.value === 'white' && (
-                              <div className="absolute inset-0 border rounded-full border-gray-300"></div>
-                            )}
-                          </button>
+                            {family}
+                          </Button>
                         ))}
                       </div>
                     </div>
@@ -377,9 +315,16 @@ export default function CategoryPage() {
       </div>
 
       {/* Products Grid */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {loading ? (
           <BottleLoader compact label="Selecting fragrances" />
+        ) : fetchError ? (
+          <div className="text-center py-12" role="alert">
+            <Package className="w-16 h-16 mx-auto text-[#8b5b66] mb-4" />
+            <h3 className="text-xl font-semibold mb-2">We could not load this collection</h3>
+            <p className="text-gray-500 mb-4">{typeof fetchError === 'string' ? fetchError : 'Please try again.'}</p>
+            <Button onClick={fetchProducts} variant="outline">Try again</Button>
+          </div>
         ) : filteredProducts.length === 0 ? (
           <div className="text-center py-12">
             <Package className="w-16 h-16 mx-auto text-gray-400 mb-4" />
@@ -402,9 +347,9 @@ export default function CategoryPage() {
                     Size: {size} ×
                   </Badge>
                 ))}
-                {selectedColors.map(color => (
-                  <Badge key={color} variant="secondary" className="cursor-pointer" onClick={() => toggleColor(color)}>
-                    {color} ×
+                {selectedFamilies.map(family => (
+                  <Badge key={family} variant="secondary" className="cursor-pointer" onClick={() => toggleFamily(family)}>
+                    {family} ×
                   </Badge>
                 ))}
                 {minRating > 0 && (
@@ -418,12 +363,12 @@ export default function CategoryPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-4">
               {filteredProducts.map(product => (
                 <ProductCard
                   key={product.id}
                   product={product}
-                  onClick={() => navigate(`/customer/product/${product.id}`)}
+                  onClick={() => navigate(`/customer/product/${product.slug || product.id}`)}
                 />
               ))}
             </div>

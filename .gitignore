@@ -46,6 +46,10 @@ env/
 *.pid
 *.seed
 dump.rdb
+.preview-logs/
+cloudflared-preview*
+playwright-report/
+test-results/
 
 # Local databases and generated data
 *.db

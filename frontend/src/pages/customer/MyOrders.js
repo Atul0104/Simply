@@ -5,8 +5,9 @@ import axios from 'axios';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Package, Truck } from 'lucide-react';
+import { ArrowLeft, Download, Package, Truck } from 'lucide-react';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -27,6 +28,7 @@ export default function MyOrders() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [invoiceLoading, setInvoiceLoading] = useState('');
 
   useEffect(() => {
     if (user) {
@@ -45,6 +47,27 @@ export default function MyOrders() {
     }
   };
 
+  const downloadInvoice = async (order) => {
+    setInvoiceLoading(order.id);
+    try {
+      await axios.post(`${API_URL}/orders/${order.id}/invoices`);
+      const response = await axios.get(`${API_URL}/orders/${order.id}/invoice-download`, { responseType: 'blob' });
+      const url = URL.createObjectURL(response.data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `perfurm-invoice-${order.id}.html`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Invoice downloaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Invoice is not available yet');
+    } finally {
+      setInvoiceLoading('');
+    }
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -60,12 +83,12 @@ export default function MyOrders() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="max-w-5xl mx-auto px-3 py-4 sm:px-4 sm:py-6">
         <Button variant="ghost" onClick={() => navigate('/')} className="mb-4" data-testid="back-btn">
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Home
         </Button>
         
-        <h1 className="text-3xl font-bold mb-6">My Orders</h1>
+        <h1 className="mb-5 text-2xl font-bold sm:mb-6 sm:text-3xl">My Orders</h1>
         
         {loading ? (
           <div className="text-center py-12">Loading...</div>
@@ -81,11 +104,11 @@ export default function MyOrders() {
           <div className="space-y-4">
             {orders.map((order) => (
               <Card key={order.id} data-testid={`order-${order.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
+                <CardContent className="p-3 sm:p-4">
+                  <div className="mb-4 flex flex-col items-start gap-2 min-[420px]:flex-row min-[420px]:justify-between">
+                    <div className="min-w-0">
                       <p className="text-sm text-gray-500">Order ID</p>
-                      <p className="font-mono font-semibold">{order.id}</p>
+                      <p className="break-all font-mono text-sm font-semibold sm:text-base">{order.id}</p>
                       <p className="text-sm text-gray-500 mt-1">
                         {format(new Date(order.created_at), 'PPP')}
                       </p>
@@ -95,11 +118,23 @@ export default function MyOrders() {
                     </Badge>
                   </div>
                   
-                  <div className="space-y-2 mb-4">
+                  <div className="mb-4 space-y-3">
                     {order.items.map((item, idx) => (
-                      <div key={idx} className="flex justify-between text-sm">
-                        <span>{item.name} x {item.quantity}</span>
-                        <span>₹{(item.price * item.quantity).toFixed(2)}</span>
+                      <div key={`${item.product_id}-${item.variant_id || idx}`} className="flex items-center gap-3 rounded-xl border border-stone-200 bg-white p-2.5 sm:p-3">
+                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-stone-100 sm:h-20 sm:w-20">
+                          {item.image ? (
+                            <img src={item.image} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+                          ) : (
+                            <div className="grid h-full w-full place-items-center"><Package className="h-7 w-7 text-stone-400" /></div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <button type="button" onClick={() => navigate(`/product/${item.product_id}`)} className="text-left font-semibold text-stone-900 hover:text-[#6f3b49] hover:underline">
+                            {item.name}
+                          </button>
+                          <p className="mt-1 text-xs text-stone-500">{item.size || 'Standard bottle'} · Qty {item.quantity}</p>
+                          <p className="mt-1 text-sm font-semibold text-[#6f3b49]">₹{(item.price * item.quantity).toFixed(2)}</p>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -118,10 +153,10 @@ export default function MyOrders() {
                   </div>
 
                   {order.tracking_id && (
-                    <div className="mt-4 p-3 bg-blue-50 rounded-lg flex items-center justify-between">
-                      <div>
+                    <div className="mt-4 flex flex-col gap-3 rounded-lg bg-blue-50 p-3 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-blue-900">Tracking ID:</p>
-                        <p className="font-mono text-sm">{order.tracking_id}</p>
+                        <p className="break-all font-mono text-sm">{order.tracking_id}</p>
                       </div>
                       <Button
                         size="sm"
@@ -134,7 +169,13 @@ export default function MyOrders() {
                     </div>
                   )}
 
-                  <div className="mt-4 flex gap-2">
+                  <div className="mt-4 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:flex-wrap">
+                    {!['pending', 'payment_pending', 'payment_failed', 'cancelled'].includes(order.status) && (
+                      <Button variant="outline" size="sm" onClick={() => downloadInvoice(order)} disabled={invoiceLoading === order.id} className="flex-1">
+                        <Download className="w-4 h-4 mr-2" />
+                        {invoiceLoading === order.id ? 'Preparing…' : 'Invoice'}
+                      </Button>
+                    )}
                     {order.status === 'delivered' && (
                       <Button
                         variant="outline"

@@ -17,16 +17,18 @@ const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 const COLORS = ['#8B5CF6', '#EC4899', '#10B981', '#F59E0B', '#3B82F6', '#EF4444', '#6366F1', '#14B8A6'];
 
 export default function PlatformAnalytics() {
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [analytics, setAnalytics] = useState(null);
   const [sellerRevenue, setSellerRevenue] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [campaignAnalytics, setCampaignAnalytics] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchAnalytics();
     fetchSellerRevenue();
+    if (user?.admin_role === 'super_admin') fetchCampaignAnalytics();
   }, []);
 
   const fetchAnalytics = async () => {
@@ -51,6 +53,15 @@ export default function PlatformAnalytics() {
       setSellerRevenue(response.data);
     } catch (error) {
       console.error('Error fetching seller revenue:', error);
+    }
+  };
+
+  const fetchCampaignAnalytics = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/admin/analytics/creator-campaigns`, { headers: { Authorization: `Bearer ${token}` } });
+      setCampaignAnalytics(response.data);
+    } catch (error) {
+      console.error('Error fetching creator campaign analytics:', error);
     }
   };
 
@@ -104,11 +115,9 @@ export default function PlatformAnalytics() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">Platform Analytics</h1>
-            <p className="text-gray-500">Complete revenue and seller performance overview</p>
+            <p className="text-gray-500">Complete store revenue, orders and campaign overview</p>
           </div>
-          <Button onClick={() => navigate('/admin/payouts')} className="gap-2">
-            <DollarSign className="w-4 h-4" /> Manage Payouts
-          </Button>
+          <Button onClick={() => navigate('/admin/orders')} className="gap-2"><ShoppingBag className="w-4 h-4" /> Manage Orders</Button>
         </div>
 
         {/* Summary Cards */}
@@ -126,12 +135,12 @@ export default function PlatformAnalytics() {
 
           <Card data-testid="analytics-sellers" className="bg-gradient-to-br from-pink-500 to-pink-600 text-white">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-pink-100">Active Sellers</CardTitle>
-              <Store className="w-5 h-5 text-pink-200" />
+              <CardTitle className="text-sm font-medium text-pink-100">Active Products</CardTitle>
+              <Package className="w-5 h-5 text-pink-200" />
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold">{analytics?.total_sellers || 0}</div>
-              <p className="text-xs text-pink-200 mt-1">{analytics?.pending_sellers || 0} pending approval</p>
+              <div className="text-3xl font-bold">{analytics?.total_products || 0}</div>
+              <p className="text-xs text-pink-200 mt-1">Available in the catalogue</p>
             </CardContent>
           </Card>
 
@@ -160,11 +169,28 @@ export default function PlatformAnalytics() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full md:w-auto grid-cols-2 md:grid-cols-3">
+          <TabsList className={`grid w-full md:w-auto grid-cols-2 ${user?.admin_role === 'super_admin' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="sellers" data-testid="tab-sellers">Seller Revenue</TabsTrigger>
+            <TabsTrigger value="sellers" data-testid="tab-sellers">Revenue Details</TabsTrigger>
             <TabsTrigger value="charts" data-testid="tab-charts">Charts</TabsTrigger>
+            {user?.admin_role === 'super_admin' && <TabsTrigger value="campaigns" data-testid="tab-campaigns">Campaigns</TabsTrigger>}
           </TabsList>
+
+          {user?.admin_role === 'super_admin' && <TabsContent value="campaigns" className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle>Creator and social attribution</CardTitle></CardHeader>
+              <CardContent>
+                <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {(campaignAnalytics?.channels || []).map(channel => <div key={channel.channel} className="rounded-xl border bg-white p-4"><p className="text-xs uppercase tracking-wider text-gray-500">{channel.channel}</p><p className="mt-1 text-2xl font-bold">{channel.views}</p><p className="text-xs text-gray-500">views · {channel.clicks} visits · {channel.likes} likes</p></div>)}
+                </div>
+                <div className="overflow-x-auto">
+                  <Table><TableHeader><TableRow><TableHead>Campaign</TableHead><TableHead>Creator</TableHead><TableHead>Channel</TableHead><TableHead>Views</TableHead><TableHead>Clicks</TableHead><TableHead>Likes</TableHead><TableHead>CTR</TableHead></TableRow></TableHeader><TableBody>
+                    {(campaignAnalytics?.campaigns || []).map(campaign => <TableRow key={campaign.id}><TableCell className="font-medium">{campaign.title}</TableCell><TableCell>{campaign.creator_name}</TableCell><TableCell className="capitalize">{campaign.social_channel}</TableCell><TableCell>{campaign.views}</TableCell><TableCell>{campaign.clicks}</TableCell><TableCell>{campaign.likes}</TableCell><TableCell>{campaign.ctr}%</TableCell></TableRow>)}
+                  </TableBody></Table>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>}
 
           {/* Overview Tab */}
           <TabsContent value="overview" className="space-y-4">
@@ -202,7 +228,7 @@ export default function PlatformAnalytics() {
 
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-gray-500">Seller Payouts Done</CardTitle>
+                    <CardTitle className="text-sm text-gray-500">Net Store Revenue</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold text-green-600">
@@ -217,7 +243,7 @@ export default function PlatformAnalytics() {
 
                 <Card>
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-gray-500">Pending Payouts</CardTitle>
+                    <CardTitle className="text-sm text-gray-500">Pending Settlement</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold text-orange-600">
@@ -236,7 +262,7 @@ export default function PlatformAnalytics() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5" /> Top Performing Sellers
+                  <BarChart3 className="w-5 h-5" /> Store Revenue Performance
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -266,7 +292,7 @@ export default function PlatformAnalytics() {
           <TabsContent value="sellers">
             <Card>
               <CardHeader>
-                <CardTitle>Seller-wise Revenue Breakdown</CardTitle>
+                <CardTitle>Revenue Breakdown</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">

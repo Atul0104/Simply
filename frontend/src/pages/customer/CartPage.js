@@ -4,10 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowLeft, Trash2, Plus, Minus, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
+import PerfumeRecommendations from '@/components/PerfumeRecommendations';
 
 // Helper function to create a unique key for cart items
 const getCartItemKey = (item) => {
-  return `${item.product_id}-${item.size || 'default'}-${item.color || 'default'}`;
+  return `${item.product_id}-${item.variant_id || item.size || 'default'}`;
 };
 
 export default function CartPage() {
@@ -23,13 +24,11 @@ export default function CartPage() {
     setCart(savedCart);
   };
 
-  // Updated to handle items with different sizes/colors
-  const updateQuantity = (productId, size, color, delta) => {
+  const updateQuantity = (productId, variantId, size, delta) => {
     const updatedCart = cart.map(item => {
-      // Match by product_id AND size AND color
       if (item.product_id === productId && 
-          (item.size || 'default') === (size || 'default') && 
-          (item.color || 'default') === (color || 'default')) {
+          (item.variant_id || null) === (variantId || null) &&
+          (item.size || 'default') === (size || 'default')) {
         return { ...item, quantity: Math.max(1, item.quantity + delta) };
       }
       return item;
@@ -38,14 +37,12 @@ export default function CartPage() {
     localStorage.setItem('cart', JSON.stringify(updatedCart));
   };
 
-  // Updated to remove only the specific item (by product_id + size + color)
-  const removeItem = (productId, size, color) => {
+  const removeItem = (productId, variantId, size) => {
     const updatedCart = cart.filter(item => {
-      // Keep items that don't match ALL criteria (product_id AND size AND color)
       const matchesProduct = item.product_id === productId;
+      const matchesVariant = (item.variant_id || null) === (variantId || null);
       const matchesSize = (item.size || 'default') === (size || 'default');
-      const matchesColor = (item.color || 'default') === (color || 'default');
-      return !(matchesProduct && matchesSize && matchesColor);
+      return !(matchesProduct && matchesVariant && matchesSize);
     });
     setCart(updatedCart);
     localStorage.setItem('cart', JSON.stringify(updatedCart));
@@ -57,44 +54,44 @@ export default function CartPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="max-w-5xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         <Button variant="ghost" onClick={() => navigate('/')} className="mb-4" data-testid="back-btn">
           <ArrowLeft className="w-4 h-4 mr-2" /> Continue Shopping
         </Button>
         
-        <h1 className="text-3xl font-bold mb-6">Shopping Cart</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-6">Shopping Cart</h1>
         
         {cart.length === 0 ? (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <ShoppingBag className="w-16 h-16 mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500 mb-4">Your cart is empty</p>
-              <Button onClick={() => navigate('/')}>Start Shopping</Button>
-            </CardContent>
-          </Card>
+          <div>
+            <Card>
+              <CardContent className="p-12 text-center">
+                <ShoppingBag className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+                <p className="text-gray-500 mb-4">Your cart is empty</p>
+                <Button onClick={() => navigate('/')}>Start Shopping</Button>
+              </CardContent>
+            </Card>
+            <PerfumeRecommendations title="Trending perfumes to start your cart" />
+          </div>
         ) : (
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-4">
               {cart.map((item) => (
                 <Card key={getCartItemKey(item)} data-testid={`cart-item-${getCartItemKey(item)}`}>
-                  <CardContent className="p-4">
-                    <div className="flex gap-4">
-                      <div className="w-24 h-24 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="flex gap-3 sm:gap-4">
+                      <div className="w-20 h-24 sm:w-24 sm:h-24 bg-gray-100 rounded flex-shrink-0 overflow-hidden">
                         {item.image ? (
-                          <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                          <img src={item.image} alt={item.name} className="w-full h-full object-contain p-1" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-gray-400">No image</div>
                         )}
                       </div>
                       
-                      <div className="flex-1">
-                        <h3 className="font-semibold mb-1">{item.name}</h3>
-                        {/* Display size and color if available */}
-                        {(item.size || item.color) && (
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold mb-1 text-sm sm:text-base line-clamp-2">{item.name}</h3>
+                        {item.size && (
                           <p className="text-sm text-gray-500 mb-1">
-                            {item.size && <span>Size: {item.size}</span>}
-                            {item.size && item.color && <span> | </span>}
-                            {item.color && <span>Color: {item.color}</span>}
+                            <span>Bottle: {item.size}</span>
                           </p>
                         )}
                         <p className="text-lg font-bold mb-2">₹{item.price}</p>
@@ -103,7 +100,7 @@ export default function CartPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => updateQuantity(item.product_id, item.size, item.color, -1)}
+                            onClick={() => updateQuantity(item.product_id, item.variant_id, item.size, -1)}
                             data-testid={`decrease-qty-${getCartItemKey(item)}`}
                           >
                             <Minus className="w-4 h-4" />
@@ -112,7 +109,7 @@ export default function CartPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => updateQuantity(item.product_id, item.size, item.color, 1)}
+                            onClick={() => updateQuantity(item.product_id, item.variant_id, item.size, 1)}
                             data-testid={`increase-qty-${getCartItemKey(item)}`}
                           >
                             <Plus className="w-4 h-4" />
@@ -123,7 +120,7 @@ export default function CartPage() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => removeItem(item.product_id, item.size, item.color)}
+                        onClick={() => removeItem(item.product_id, item.variant_id, item.size)}
                         data-testid={`remove-item-${getCartItemKey(item)}`}
                       >
                         <Trash2 className="w-5 h-5 text-red-500" />

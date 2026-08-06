@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { ArrowLeft, Home, Mail, Phone, Lock, User, Eye, EyeOff, MessageCircle, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -40,7 +39,7 @@ export default function AuthPage() {
   // Validation states
   const [validationErrors, setValidationErrors] = useState({});
   
-  const { login, register } = useAuth();
+  const { login, register, establishSession } = useAuth();
   const navigate = useNavigate();
 
   // OTP Timer countdown
@@ -64,7 +63,7 @@ export default function AuthPage() {
 
   const validatePassword = (password) => {
     // At least 8 chars, 1 uppercase, 1 lowercase, 1 number, 1 special char
-    const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,}$/;
+    const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{10,}$/;
     return re.test(password);
   };
 
@@ -118,9 +117,7 @@ export default function AuthPage() {
       });
       
       const { access_token, user } = response.data;
-      localStorage.setItem('token', access_token);
-      localStorage.setItem('user', JSON.stringify(user));
-      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+      establishSession(access_token, user);
       
       toast.success('Login successful!');
       navigate('/');
@@ -174,12 +171,12 @@ export default function AuthPage() {
       errors.email = 'Please enter a valid email';
     }
     
-    if (!validatePhone(registerData.phone)) {
-      errors.phone = 'Please enter a valid 10-digit phone number';
+    if (registerData.phone && !validatePhone(registerData.phone)) {
+      errors.phone = 'Enter a valid 10-digit phone number or leave it blank';
     }
     
     if (!validatePassword(registerData.password)) {
-      errors.password = 'Password must be 8+ chars with uppercase, lowercase, number & special character';
+      errors.password = 'Password must be 10+ chars with uppercase, lowercase, number and special character';
     }
     
     if (registerData.password !== registerData.confirmPassword) {
@@ -252,7 +249,7 @@ export default function AuthPage() {
   // Forgot password - Reset password
   const resetPassword = async () => {
     if (!validatePassword(newPassword)) {
-      toast.error('Password must be 8+ chars with uppercase, lowercase, number & special character');
+      toast.error('Password must be 10+ chars with uppercase, lowercase, number and special character');
       return;
     }
     
@@ -276,34 +273,33 @@ export default function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 flex items-center justify-center px-3 sm:px-4 pb-6 pt-20 md:py-10">
       {/* Back/Home Button */}
       <Button
         variant="ghost"
-        className="absolute top-4 left-4 gap-2 hover:bg-white/50"
+        className="absolute top-3 left-2 sm:top-4 sm:left-4 gap-2 hover:bg-white/50"
         onClick={() => navigate('/')}
       >
         <ArrowLeft className="w-4 h-4" />
         Back to Home
       </Button>
       
-      <div className="w-full max-w-4xl grid gap-6 md:grid-cols-2">
+      <div className="w-full max-w-4xl grid gap-5 md:grid-cols-2 md:gap-6 items-start">
         {/* Login Credentials Card */}
-        <Card className="bg-gradient-to-br from-blue-600 to-purple-700 text-white shadow-2xl">
+        <Card className="order-2 md:order-1 bg-gradient-to-br from-[#55313b] to-[#9a665f] text-white shadow-2xl">
           <CardHeader>
             <CardTitle className="text-2xl text-white">🔑 Test Accounts</CardTitle>
-            <CardDescription className="text-blue-100">Use these credentials to test different roles</CardDescription>
+            <CardDescription className="text-blue-100">The application has three profiles</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-3 md:space-y-1">
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 space-y-2 hover:bg-white/20 transition-colors">
-              <p className="font-semibold text-lg">👤 Admin</p>
+              <p className="font-semibold text-lg">Superadmin</p>
               <p className="font-mono text-sm">admin@perfurm.com</p>
               <p className="font-mono text-sm">admin123</p>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 space-y-2 hover:bg-white/20 transition-colors">
-              <p className="font-semibold text-lg">🏪 Seller</p>
-              <p className="font-mono text-sm">seller1@example.com</p>
-              <p className="font-mono text-sm">seller123</p>
+              <p className="font-semibold text-lg">Admin</p>
+              <p className="text-sm text-white/80">Department-scoped access assigned by Superadmin</p>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 space-y-2 hover:bg-white/20 transition-colors">
               <p className="font-semibold text-lg">🛒 Customer</p>
@@ -314,9 +310,9 @@ export default function AuthPage() {
         </Card>
 
         {/* Auth Form Card */}
-        <Card className="shadow-2xl">
+        <Card className="order-1 md:order-2 shadow-2xl overflow-hidden">
           <CardHeader className="text-center">
-            <CardTitle className="text-2xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+            <CardTitle as="h1" className="text-2xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
               Welcome to Perfurm
             </CardTitle>
             <CardDescription>Sign in to your account or create new one</CardDescription>
@@ -364,36 +360,45 @@ export default function AuthPage() {
                 {loginMethod === 'password' ? (
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div>
-                      <Label className="flex items-center gap-2">
+                      <Label htmlFor="login-email" className="flex items-center gap-2">
                         <Mail className="w-4 h-4 text-blue-600" /> Email
                       </Label>
                       <Input
+                        id="login-email"
                         type="email"
-                        placeholder="Enter your email"
+                          placeholder="Enter your email"
                         value={loginData.email}
                         onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                        className={validationErrors.email ? 'border-red-500' : ''}
+                          className={validationErrors.email ? 'border-red-500' : ''}
+                          autoComplete="email"
+                          maxLength={254}
+                          required
                       />
                       {validationErrors.email && (
                         <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
                       )}
                     </div>
                     <div>
-                      <Label className="flex items-center gap-2">
+                      <Label htmlFor="login-password" className="flex items-center gap-2">
                         <Lock className="w-4 h-4 text-purple-600" /> Password
                       </Label>
                       <div className="relative">
                         <Input
+                          id="login-password"
                           type={showPassword ? 'text' : 'password'}
                           placeholder="Enter your password"
                           value={loginData.password}
                           onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
                           className={validationErrors.password ? 'border-red-500 pr-10' : 'pr-10'}
+                          autoComplete="current-password"
+                          maxLength={128}
+                          required
                         />
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          aria-label={showPassword ? 'Hide password' : 'Show password'}
                         >
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -433,6 +438,9 @@ export default function AuthPage() {
                           onChange={(e) => handlePhoneInput(e.target.value, 'phone', setLoginData, loginData)}
                           className="rounded-l-none"
                           maxLength={10}
+                          inputMode="numeric"
+                          autoComplete="tel-national"
+                          pattern="[6-9][0-9]{9}"
                         />
                       </div>
                     </div>
@@ -520,6 +528,10 @@ export default function AuthPage() {
                       value={registerData.name}
                       onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
                       className={validationErrors.name ? 'border-red-500' : ''}
+                      autoComplete="name"
+                      minLength={2}
+                      maxLength={100}
+                      required
                     />
                     {validationErrors.name && (
                       <p className="text-red-500 text-xs mt-1">{validationErrors.name}</p>
@@ -536,6 +548,9 @@ export default function AuthPage() {
                       value={registerData.email}
                       onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
                       className={validationErrors.email ? 'border-red-500' : ''}
+                      autoComplete="email"
+                      maxLength={254}
+                      required
                     />
                     {validationErrors.email && (
                       <p className="text-red-500 text-xs mt-1">{validationErrors.email}</p>
@@ -544,7 +559,7 @@ export default function AuthPage() {
                   
                   <div>
                     <Label className="flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-green-600" /> Phone Number *
+                      <Phone className="w-4 h-4 text-green-600" /> Phone Number <span className="font-normal text-stone-400">(optional)</span>
                     </Label>
                     <div className="flex gap-2">
                       <span className="flex items-center px-3 bg-gray-100 border rounded-l-md text-gray-600">+91</span>
@@ -555,6 +570,9 @@ export default function AuthPage() {
                         onChange={(e) => handlePhoneInput(e.target.value, 'phone', setRegisterData, registerData)}
                         className={`rounded-l-none ${validationErrors.phone ? 'border-red-500' : ''}`}
                         maxLength={10}
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        pattern="[6-9][0-9]{9}"
                       />
                     </div>
                     {validationErrors.phone && (
@@ -573,11 +591,16 @@ export default function AuthPage() {
                         value={registerData.password}
                         onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
                         className={`pr-10 ${validationErrors.password ? 'border-red-500' : ''}`}
+                        autoComplete="new-password"
+                        minLength={10}
+                        maxLength={128}
+                        required
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
                       >
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -585,7 +608,7 @@ export default function AuthPage() {
                     {validationErrors.password && (
                       <p className="text-red-500 text-xs mt-1">{validationErrors.password}</p>
                     )}
-                    <p className="text-xs text-gray-500 mt-1">Min 8 chars, uppercase, lowercase, number & special char</p>
+                    <p className="text-xs text-gray-500 mt-1">At least 10 characters with uppercase, lowercase, number and symbol</p>
                   </div>
                   
                   <div>
@@ -599,11 +622,16 @@ export default function AuthPage() {
                         value={registerData.confirmPassword}
                         onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
                         className={`pr-10 ${validationErrors.confirmPassword ? 'border-red-500' : ''}`}
+                        autoComplete="new-password"
+                        minLength={10}
+                        maxLength={128}
+                        required
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                         className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'}
                       >
                         {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -613,17 +641,8 @@ export default function AuthPage() {
                     )}
                   </div>
                   
-                  <div>
-                    <Label>Register as</Label>
-                    <Select value={registerData.role} onValueChange={(v) => setRegisterData({ ...registerData, role: v })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="customer">🛒 Customer</SelectItem>
-                        <SelectItem value="seller">🏪 Seller</SelectItem>
-                      </SelectContent>
-                    </Select>
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">
+                    New accounts are created as <strong>Customer</strong>. Admin access is assigned securely by the Superadmin.
                   </div>
                   
                   <Button type="submit" className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700" disabled={loading}>

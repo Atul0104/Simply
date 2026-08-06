@@ -47,7 +47,7 @@ export default function ReturnRequest() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-gray-50 px-3 py-4 sm:p-6">
       <div className="max-w-2xl mx-auto">
         <Button
           variant="ghost"
@@ -86,8 +86,11 @@ export default function ReturnRequest() {
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Please explain why you want to return/cancel this order"
                   rows={4}
+                  minLength={10}
+                  maxLength={1000}
                   required
                 />
+                <p className="mt-1 text-xs text-gray-500">Provide at least 10 characters so the operations team can review the request.</p>
               </div>
 
               <div className="bg-blue-50 p-4 rounded-lg">

@@ -27,7 +27,11 @@ export default function CouponManagement() {
     max_discount: '',
     valid_from: new Date().toISOString().slice(0, 16),
     valid_until: '',
-    usage_limit: ''
+    usage_limit: '',
+    per_customer_usage_limit: '1',
+    audience_type: 'all',
+    min_completed_orders: '',
+    eligible_user_ids: []
   });
 
   useEffect(() => {
@@ -57,6 +61,8 @@ export default function CouponManagement() {
         min_order_amount: parseFloat(formData.min_order_amount) || 0,
         max_discount: formData.max_discount ? parseFloat(formData.max_discount) : null,
         usage_limit: formData.usage_limit ? parseInt(formData.usage_limit) : null,
+        per_customer_usage_limit: formData.per_customer_usage_limit ? parseInt(formData.per_customer_usage_limit) : null,
+        min_completed_orders: formData.audience_type === 'completed_orders' ? parseInt(formData.min_completed_orders) : null,
         valid_from: new Date(formData.valid_from).toISOString(),
         valid_until: new Date(formData.valid_until).toISOString()
       };
@@ -83,7 +89,9 @@ export default function CouponManagement() {
       max_discount: '',
       valid_from: new Date().toISOString().slice(0, 16),
       valid_until: '',
-      usage_limit: ''
+      usage_limit: '',
+      per_customer_usage_limit: '1'
+      ,audience_type: 'all', min_completed_orders: '', eligible_user_ids: []
     });
   };
 
@@ -124,8 +132,8 @@ export default function CouponManagement() {
               <DialogTitle>Create New Coupon</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
                   <Label htmlFor="code">Coupon Code *</Label>
                   <Input
                     id="code"
@@ -214,7 +222,7 @@ export default function CouponManagement() {
                   />
                 </div>
 
-                <div className="col-span-2">
+                <div>
                   <Label htmlFor="usage_limit">Usage Limit (Optional)</Label>
                   <Input
                     id="usage_limit"
@@ -223,6 +231,31 @@ export default function CouponManagement() {
                     onChange={(e) => setFormData({ ...formData, usage_limit: e.target.value })}
                     placeholder="Leave empty for unlimited"
                   />
+                </div>
+                <div>
+                  <Label htmlFor="per_customer_usage_limit">Uses Per Customer</Label>
+                  <Input
+                    id="per_customer_usage_limit"
+                    type="number"
+                    min="1"
+                    value={formData.per_customer_usage_limit}
+                    onChange={(e) => setFormData({ ...formData, per_customer_usage_limit: e.target.value })}
+                    placeholder="1"
+                  />
+                </div>
+                <div className="sm:col-span-2 rounded-xl border bg-stone-50 p-4">
+                  <Label>Who can use this coupon? *</Label>
+                  <Select value={formData.audience_type} onValueChange={(value) => setFormData({ ...formData, audience_type: value, eligible_user_ids: [], min_completed_orders: '' })}>
+                    <SelectTrigger className="mt-1 bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All customers</SelectItem>
+                      <SelectItem value="first_order">First purchase only</SelectItem>
+                      <SelectItem value="completed_orders">Order milestone</SelectItem>
+                      <SelectItem value="specific_users">Specific customer IDs</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {formData.audience_type === 'completed_orders' && <div className="mt-3"><Label>Required completed orders *</Label><Input type="number" min="1" max="10000" value={formData.min_completed_orders} onChange={(e)=>setFormData({...formData,min_completed_orders:e.target.value})} placeholder="For example: 10" required /></div>}
+                  {formData.audience_type === 'specific_users' && <div className="mt-3"><Label>Eligible user IDs *</Label><Input value={formData.eligible_user_ids.join(', ')} onChange={(e)=>setFormData({...formData,eligible_user_ids:e.target.value.split(',').map(v=>v.trim()).filter(Boolean)})} placeholder="Paste one or more customer IDs, separated by commas" required /><p className="mt-1 text-xs text-stone-500">Copy IDs from User Management. Eligibility is checked securely during checkout.</p></div>}
                 </div>
               </div>
 
@@ -290,6 +323,7 @@ export default function CouponManagement() {
                     <span className="text-gray-600">Min Order:</span>
                     <span className="font-semibold">₹{coupon.min_order_amount}</span>
                   </div>
+                  <div className="flex items-center justify-between"><span className="text-gray-600">Audience:</span><span className="font-semibold capitalize">{(coupon.audience_type || 'all').replace('_',' ')}</span></div>
                   
                   <div className="flex items-center justify-between">
                     <span className="text-gray-600">Usage:</span>

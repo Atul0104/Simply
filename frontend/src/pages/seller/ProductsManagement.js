@@ -1,468 +1,193 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useAuth } from '@/contexts/AuthContext';
+import { ArrowLeft, ChevronLeft, ChevronRight, Edit, Image as ImageIcon, Package, Plus, Search, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ArrowLeft, Plus, Edit, Trash2, Image as ImageIcon, Video, X, Info } from 'lucide-react';
-import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
+const FALLBACK_CATEGORIES = ['For Him', 'For Her', 'Unisex', 'Home Scents', 'Discovery Sets', 'Gifting'];
+const FAMILIES = ['Floral', 'Woody', 'Fresh', 'Citrus', 'Oriental', 'Gourmand', 'Aquatic', 'Aromatic', 'Fruity', 'Leather'];
+const CONCENTRATIONS = ['Parfum', 'EDP', 'EDT', 'EDC', 'Body Mist', 'Home Fragrance'];
+const LONGEVITY = ['Light (2–4 hours)', 'Moderate (4–6 hours)', 'Long-lasting (6–8 hours)', 'Very long-lasting (8+ hours)'];
+const SILLAGE = ['Intimate', 'Moderate', 'Strong', 'Room-filling'];
 
-export default function ProductsManagement() {
+const emptyForm = () => ({
+  name: '', brand: 'Perfurm', slug: '', short_description: '', description: '', category: '',
+  target_category: 'Unisex', fragrance_family: '', concentration: '', price: '', mrp: '', cost_price: '', sku: '',
+  top_notes: '', middle_notes: '', base_notes: '', longevity: '', sillage: '', seasons: '', occasions: '',
+  ingredients: '', usage_instructions: '', safety_information: '', country_of_origin: '', manufacturer_details: '',
+  shelf_life_months: '', gst_category: '', seo_title: '', seo_description: '', seo_keywords: '', canonical_url: '',
+  images: [], videos: [], variants: [], sizes: [], specifications: {}, filters: {}, colors: [], color_images: {}, is_coming_soon: false,
+});
+
+const listText = value => Array.isArray(value) ? value.join(', ') : '';
+const parseList = value => String(value || '').split(',').map(item => item.trim()).filter(Boolean);
+const money = value => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(Number(value || 0));
+
+function toForm(product) {
+  const form = emptyForm();
+  Object.keys(form).forEach(key => { if (product[key] !== undefined && product[key] !== null) form[key] = product[key]; });
+  ['top_notes', 'middle_notes', 'base_notes', 'seasons', 'occasions', 'seo_keywords'].forEach(key => { form[key] = listText(product[key]); });
+  form.cost_price = product.cost_price ?? '';
+  form.shelf_life_months = product.shelf_life_months ?? '';
+  return form;
+}
+
+function payloadFrom(form) {
+  const payload = { ...form };
+  ['top_notes', 'middle_notes', 'base_notes', 'seasons', 'occasions', 'seo_keywords'].forEach(key => { payload[key] = parseList(form[key]); });
+  ['price', 'mrp'].forEach(key => { payload[key] = Number(form[key]); });
+  payload.cost_price = form.cost_price === '' ? null : Number(form.cost_price);
+  payload.shelf_life_months = form.shelf_life_months === '' ? null : Number(form.shelf_life_months);
+  payload.slug = form.slug || null;
+  payload.sizes = form.variants.map(variant => variant.label || (variant.size_ml ? `${variant.size_ml} ml` : '')).filter(Boolean);
+  payload.variants = form.variants.map(variant => ({
+    ...variant, size_ml: variant.size_ml === '' ? null : Number(variant.size_ml),
+    price: Number(variant.price), mrp: Number(variant.mrp),
+    cost_price: variant.cost_price === '' || variant.cost_price == null ? null : Number(variant.cost_price),
+    stock_quantity: Number(variant.stock_quantity || 0), low_stock_limit: Number(variant.low_stock_limit ?? 5),
+  }));
+  return payload;
+}
+
+export default function ProductsManagement({ adminMode = false }) {
+  const navigate = useNavigate();
   const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState(FALLBACK_CATEGORIES);
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+  const [pages, setPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showDialog, setShowDialog] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
-  const [categories, setCategories] = useState([]);
-  const [platformSettings, setPlatformSettings] = useState(null);
+  const [form, setForm] = useState(emptyForm());
   const [imageUrl, setImageUrl] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    category: '',
-    price: '',
-    mrp: '',
-    sku: '',
-    images: [],
-    videos: [],
-    specifications: {}
-  });
-  const { user } = useAuth();
-  const navigate = useNavigate();
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    fetchProducts();
-    fetchCategories();
-    fetchPlatformSettings();
-  }, []);
-
-  const fetchProducts = async () => {
+  const fetchProducts = useCallback(async () => {
+    setLoading(true); setError('');
     try {
-      const seller = await axios.get(`${API_URL}/sellers/me`);
-      const response = await axios.get(`${API_URL}/products`, {
-        params: { seller_id: seller.data.id }
-      });
-      setProducts(response.data);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    }
-  };
+      const endpoint = adminMode ? '/admin/catalogue/products' : '/seller/products';
+      const response = await axios.get(`${API_URL}${endpoint}`, { params: { q: query || undefined, page, page_size: 24 } });
+      setProducts(response.data.items || []); setTotal(response.data.total || 0); setPages(response.data.pages || 1);
+    } catch (requestError) { setError(requestError.response?.data?.detail || 'Unable to load your catalogue'); }
+    finally { setLoading(false); }
+  }, [adminMode, page, query]);
 
-  const fetchCategories = async () => {
+  useEffect(() => { const timer = setTimeout(fetchProducts, 250); return () => clearTimeout(timer); }, [fetchProducts]);
+  useEffect(() => { axios.get(`${API_URL}/categories/list`).then(response => { if (response.data?.length) setCategories(response.data); }).catch(() => {}); }, []);
+
+  function resetForm() { setForm(emptyForm()); setEditingProduct(null); setImageUrl(''); }
+  function openEdit(product) { setEditingProduct(product); setForm(toForm(product)); setShowDialog(true); }
+  function addVariant() {
+    setForm(current => ({ ...current, variants: [...current.variants, {
+      id: globalThis.crypto?.randomUUID?.(), sku: `${current.sku || 'SKU'}-${current.variants.length + 1}`,
+      size_ml: '', label: '', price: current.price, mrp: current.mrp, cost_price: current.cost_price,
+      stock_quantity: 0, low_stock_limit: 5, image: null, is_active: true,
+    }] }));
+  }
+  function addStandardBottleRange() {
+    const base = (form.sku || form.name || 'PFM').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'PFM';
+    const basePrice = Number(form.price || 0);
+    const baseMrp = Number(form.mrp || basePrice || 0);
+    const sizes = [10, 30, 50, 100];
+    setForm(current => ({ ...current, sku: current.sku || base, slug: current.slug || current.name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), variants: sizes.map((size, index) => ({
+      id: globalThis.crypto?.randomUUID?.(), sku: `${base}-${size}`, size_ml: size, label: `${size} ml`,
+      price: basePrice ? Math.max(1, Math.round(basePrice * [0.28, 0.62, 1, 1.72][index])) : '',
+      mrp: baseMrp ? Math.max(1, Math.round(baseMrp * [0.28, 0.62, 1, 1.72][index])) : '',
+      cost_price: '', stock_quantity: 0, low_stock_limit: 5, image: null, is_active: true,
+    })) }));
+  }
+  function updateVariant(index, changes) { setForm(current => ({ ...current, variants: current.variants.map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item) })); }
+  function removeVariant(index) { setForm(current => ({ ...current, variants: current.variants.filter((_, itemIndex) => itemIndex !== index) })); }
+
+  async function submitProduct(event) {
+    event.preventDefault();
+    if (!form.images.length) { toast.error('Add at least one product image'); return; }
+    if (!form.variants.length) { toast.error('Add at least one bottle size'); return; }
+    if (form.variants.some(item => !item.sku || Number(item.price) <= 0 || Number(item.mrp) < Number(item.price))) { toast.error('Every bottle size needs a unique SKU and a valid price not above MRP'); return; }
+    setSaving(true);
     try {
-      const response = await axios.get(`${API_URL}/categories/list`);
-      setCategories(response.data);
-    } catch (error) {
-      console.error('Error fetching categories:', error);
-    }
-  };
+      const payload = payloadFrom(form);
+      const base = adminMode ? `${API_URL}/admin/catalogue/products` : `${API_URL}/products`;
+      if (editingProduct) await axios.put(`${base}/${editingProduct.id}`, payload);
+      else await axios.post(base, payload);
+      toast.success(editingProduct ? 'Fragrance updated' : 'Fragrance created');
+      setShowDialog(false); resetForm(); fetchProducts();
+    } catch (requestError) { toast.error(requestError.response?.data?.detail || 'Fragrance could not be saved'); }
+    finally { setSaving(false); }
+  }
 
-  const fetchPlatformSettings = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/platform-settings`);
-      setPlatformSettings(response.data);
-    } catch (error) {
-      console.error('Error fetching settings:', error);
-    }
-  };
-
-  const calculateFees = (price) => {
-    if (!platformSettings || !price) return null;
-    const platformFee = (price * platformSettings.platform_fee_percentage) / 100;
-    const promotionFee = (price * platformSettings.promotion_fee_percentage) / 100;
-    const yourEarnings = price - platformFee - promotionFee;
-    return { platformFee, promotionFee, yourEarnings };
-  };
-
-  const handleAddImage = () => {
-    if (imageUrl.trim()) {
-      setFormData({
-        ...formData,
-        images: [...formData.images, imageUrl]
-      });
-      setImageUrl('');
-    }
-  };
-
-  const handleRemoveImage = (index) => {
-    const newImages = formData.images.filter((_, i) => i !== index);
-    setFormData({ ...formData, images: newImages });
-  };
-
-  const handleAddVideo = () => {
-    if (videoUrl.trim()) {
-      setFormData({
-        ...formData,
-        videos: [...formData.videos, videoUrl]
-      });
-      setVideoUrl('');
-    }
-  };
-
-  const handleRemoveVideo = (index) => {
-    const newVideos = formData.videos.filter((_, i) => i !== index);
-    setFormData({ ...formData, videos: newVideos });
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    try {
-      const productData = {
-        ...formData,
-        price: parseFloat(formData.price),
-        mrp: parseFloat(formData.mrp)
-      };
-
-      if (editingProduct) {
-        await axios.put(`${API_URL}/products/${editingProduct.id}`, productData);
-        toast.success('Product updated successfully!');
-      } else {
-        await axios.post(`${API_URL}/products`, productData);
-        toast.success('Product created successfully!');
-      }
-      
-      fetchProducts();
-      resetForm();
-      setShowDialog(false);
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to save product');
-    }
-  };
-
-  const handleEdit = (product) => {
-    setEditingProduct(product);
-    setFormData({
-      name: product.name,
-      description: product.description,
-      category: product.category,
-      price: product.price.toString(),
-      mrp: product.mrp.toString(),
-      sku: product.sku,
-      images: product.images || [],
-      videos: product.videos || [],
-      specifications: product.specifications || {}
-    });
-    setShowDialog(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this product?')) return;
-    
-    try {
-      await axios.delete(`${API_URL}/products/${id}`);
-      toast.success('Product deleted successfully!');
-      fetchProducts();
-    } catch (error) {
-      toast.error('Failed to delete product');
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      description: '',
-      category: '',
-      price: '',
-      mrp: '',
-      sku: '',
-      images: [],
-      videos: [],
-      specifications: {}
-    });
-    setEditingProduct(null);
-    setImageUrl('');
-    setVideoUrl('');
-  };
-
-  const fees = calculateFees(parseFloat(formData.price));
+  async function deleteProduct(id) {
+    if (!window.confirm('Deactivate this fragrance? Existing order history will be preserved.')) return;
+    try { await axios.delete(`${adminMode ? `${API_URL}/admin/catalogue/products` : `${API_URL}/products`}/${id}`); toast.success('Fragrance deactivated'); fetchProducts(); }
+    catch (requestError) { toast.error(requestError.response?.data?.detail || 'Fragrance could not be deactivated'); }
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <Button variant="ghost" onClick={() => navigate('/seller')} className="mb-4">
-        <ArrowLeft className="w-4 h-4 mr-2" />
-        Back to Dashboard
-      </Button>
-
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Products Management</h1>
-          <p className="text-gray-500">Add and manage your products</p>
+    <main className="min-h-screen bg-stone-50 px-3 py-5 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-7xl">
+        <Button variant="ghost" onClick={() => navigate(adminMode ? '/admin' : '/seller')} className="mb-4"><ArrowLeft className="mr-2 h-4 w-4" />Dashboard</Button>
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div><p className="text-xs uppercase tracking-[0.2em] text-[#7d4956]">Catalogue studio</p><h1 className="display-serif mt-1 text-3xl font-semibold">Fragrances</h1><p className="mt-1 text-sm text-stone-500">{total} products · perfume taxonomy, bottle-size pricing and initial stock</p></div>
+          <Dialog open={showDialog} onOpenChange={open => { setShowDialog(open); if (!open) resetForm(); }}>
+            <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />Add fragrance</Button></DialogTrigger>
+            <DialogContent className="max-h-[94vh] w-[96vw] max-w-5xl overflow-y-auto p-4 sm:p-6">
+              <DialogHeader><DialogTitle>{editingProduct ? 'Edit fragrance' : 'Create fragrance'}</DialogTitle></DialogHeader>
+              <form onSubmit={submitProduct}>
+                <Tabs defaultValue="identity" className="mt-3">
+                  <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-5"><TabsTrigger value="identity">Identity</TabsTrigger><TabsTrigger value="scent">Scent</TabsTrigger><TabsTrigger value="variants">Variants</TabsTrigger><TabsTrigger value="content">Content</TabsTrigger><TabsTrigger value="seo">SEO</TabsTrigger></TabsList>
+                  <TabsContent value="identity" className="space-y-4 pt-4">
+                    <div className="flex flex-col gap-3 rounded-xl border border-[#6f3b49]/15 bg-[#fffaf6] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-[#6f3b49]">Smart product setup</p><p className="text-xs text-stone-500">Generate slug, SKU and editable 10/30/50/100 ml variants from the base 50 ml price.</p></div><Button type="button" variant="outline" onClick={addStandardBottleRange}>Build standard sizes</Button></div>
+                    <div className="grid gap-4 sm:grid-cols-2"><Field label="Product name" required value={form.name} onChange={name => setForm({ ...form, name })} placeholder="Nocturne Vetiver" /><Field label="Brand" required value={form.brand} onChange={brand => setForm({ ...form, brand })} /></div>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><SelectField label="Category" value={form.category} values={categories} onChange={category => setForm({ ...form, category })} /><SelectField label="Audience" value={form.target_category} values={['Men','Women','Unisex']} onChange={target_category => setForm({ ...form, target_category })} /><SelectField label="Family" value={form.fragrance_family} values={FAMILIES} onChange={fragrance_family => setForm({ ...form, fragrance_family })} /><SelectField label="Concentration" value={form.concentration} values={CONCENTRATIONS} onChange={concentration => setForm({ ...form, concentration })} /></div>
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><NumberField label="Selling price (₹)" required value={form.price} onChange={price => setForm({ ...form, price })} /><NumberField label="MRP (₹)" required value={form.mrp} onChange={mrp => setForm({ ...form, mrp })} /><NumberField label="Cost price (₹)" value={form.cost_price} onChange={cost_price => setForm({ ...form, cost_price })} /><Field label="Base SKU" required value={form.sku} onChange={sku => setForm({ ...form, sku })} /></div>
+                    <Field label="Short description" value={form.short_description} onChange={short_description => setForm({ ...form, short_description })} maxLength={180} /><TextField label="Full description" required value={form.description} onChange={description => setForm({ ...form, description })} />
+                    <div className="flex items-center justify-between rounded-xl border p-4"><div><Label htmlFor="coming-soon">Coming soon catalogue</Label><p className="text-xs text-stone-500">Show this product publicly with a Coming Soon badge but block checkout.</p></div><Switch id="coming-soon" checked={Boolean(form.is_coming_soon)} onCheckedChange={is_coming_soon => setForm({ ...form, is_coming_soon })} /></div>
+                  </TabsContent>
+                  <TabsContent value="scent" className="space-y-4 pt-4">
+                    <p className="text-sm text-stone-500">Separate multiple values with commas.</p>
+                    <div className="grid gap-4 sm:grid-cols-3"><Field label="Top notes" value={form.top_notes} onChange={top_notes => setForm({ ...form, top_notes })} placeholder="Bergamot, Pink pepper" /><Field label="Heart notes" value={form.middle_notes} onChange={middle_notes => setForm({ ...form, middle_notes })} placeholder="Iris, Rose" /><Field label="Base notes" value={form.base_notes} onChange={base_notes => setForm({ ...form, base_notes })} placeholder="Vetiver, Amber" /></div>
+                    <div className="grid gap-4 sm:grid-cols-2"><SelectField label="Longevity" value={form.longevity} values={LONGEVITY} onChange={longevity => setForm({ ...form, longevity })} optional /><SelectField label="Sillage" value={form.sillage} values={SILLAGE} onChange={sillage => setForm({ ...form, sillage })} optional /><Field label="Seasons" value={form.seasons} onChange={seasons => setForm({ ...form, seasons })} placeholder="Autumn, Winter" /><Field label="Occasions" value={form.occasions} onChange={occasions => setForm({ ...form, occasions })} placeholder="Evening, Formal" /></div>
+                  </TabsContent>
+                  <TabsContent value="variants" className="space-y-4 pt-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-semibold">Bottle sizes</h3><p className="text-xs text-stone-500">Stock entered here applies only when adding a new size. Later adjustments belong in Inventory.</p></div><div className="flex gap-2"><Button type="button" variant="outline" onClick={addStandardBottleRange}>Standard 4 sizes</Button><Button type="button" variant="outline" onClick={addVariant}><Plus className="mr-2 h-4 w-4" />Add size</Button></div></div>
+                    {form.variants.length === 0 ? <div className="rounded-xl border border-dashed p-8 text-center text-sm text-stone-500">Add at least one bottle size for variant-aware inventory.</div> : form.variants.map((variant, index) => <div key={variant.id || index} className="rounded-xl border bg-white p-3 sm:p-4"><div className="mb-3 flex items-center justify-between"><p className="font-medium">Size {index + 1}</p><Button type="button" size="icon" variant="ghost" onClick={() => removeVariant(index)} aria-label={`Remove size ${index + 1}`}><Trash2 className="h-4 w-4 text-red-600" /></Button></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><NumberField label="Size (ml)" value={variant.size_ml} onChange={size_ml => updateVariant(index, { size_ml, label: size_ml ? `${size_ml} ml` : '' })} /><Field label="Label" value={variant.label || ''} onChange={label => updateVariant(index, { label })} /><Field label="Variant SKU" required value={variant.sku} onChange={sku => updateVariant(index, { sku })} /><NumberField label="Initial stock" value={variant.stock_quantity} onChange={stock_quantity => updateVariant(index, { stock_quantity })} disabled={Boolean(editingProduct && variant.id)} /><NumberField label="Price (₹)" required value={variant.price} onChange={price => updateVariant(index, { price })} /><NumberField label="MRP (₹)" required value={variant.mrp} onChange={mrp => updateVariant(index, { mrp })} /><NumberField label="Cost (₹)" value={variant.cost_price ?? ''} onChange={cost_price => updateVariant(index, { cost_price })} /><NumberField label="Low-stock alert" value={variant.low_stock_limit ?? 5} onChange={low_stock_limit => updateVariant(index, { low_stock_limit })} /></div></div>)}
+                  </TabsContent>
+                  <TabsContent value="content" className="space-y-4 pt-4">
+                    <div><Label>Product images</Label><div className="mt-1 flex flex-col gap-2 sm:flex-row"><Input type="url" value={imageUrl} onChange={event => setImageUrl(event.target.value)} placeholder="https://…" /><Button type="button" variant="outline" onClick={() => { if (imageUrl.trim()) { setForm({ ...form, images: [...form.images, imageUrl.trim()] }); setImageUrl(''); } }}><ImageIcon className="mr-2 h-4 w-4" />Add URL</Button></div></div>
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{form.images.map((image, index) => <div key={`${image}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border bg-stone-100"><img src={image} alt={`Fragrance ${index + 1}`} className="h-full w-full object-contain p-2" /><Button type="button" size="icon" variant="destructive" className="absolute right-1 top-1 h-7 w-7" onClick={() => setForm({ ...form, images: form.images.filter((_, itemIndex) => itemIndex !== index) })}><X className="h-3 w-3" /></Button></div>)}</div>
+                    <div className="grid gap-4 sm:grid-cols-2"><TextField label="Ingredients" value={form.ingredients} onChange={ingredients => setForm({ ...form, ingredients })} /><TextField label="Usage instructions" value={form.usage_instructions} onChange={usage_instructions => setForm({ ...form, usage_instructions })} /><TextField label="Safety information" value={form.safety_information} onChange={safety_information => setForm({ ...form, safety_information })} /><TextField label="Manufacturer details" value={form.manufacturer_details} onChange={manufacturer_details => setForm({ ...form, manufacturer_details })} /></div>
+                    <div className="grid gap-4 sm:grid-cols-3"><Field label="Country of origin" value={form.country_of_origin} onChange={country_of_origin => setForm({ ...form, country_of_origin })} /><NumberField label="Shelf life (months)" value={form.shelf_life_months} onChange={shelf_life_months => setForm({ ...form, shelf_life_months })} /><Field label="GST category / HSN" value={form.gst_category} onChange={gst_category => setForm({ ...form, gst_category })} /></div>
+                  </TabsContent>
+                  <TabsContent value="seo" className="space-y-4 pt-4"><Field label="URL slug" value={form.slug || ''} onChange={slug => setForm({ ...form, slug })} placeholder="Generated from product name when blank" /><Field label="SEO title" value={form.seo_title} onChange={seo_title => setForm({ ...form, seo_title })} maxLength={70} /><TextField label="SEO description" value={form.seo_description} onChange={seo_description => setForm({ ...form, seo_description })} /><Field label="SEO keywords" value={form.seo_keywords} onChange={seo_keywords => setForm({ ...form, seo_keywords })} placeholder="vetiver perfume, woody fragrance" /><Field label="Canonical URL" type="url" value={form.canonical_url} onChange={canonical_url => setForm({ ...form, canonical_url })} /></TabsContent>
+                </Tabs>
+                <DialogFooter className="mt-6"><Button type="button" variant="outline" onClick={() => setShowDialog(false)}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? 'Saving…' : editingProduct ? 'Update fragrance' : 'Create fragrance'}</Button></DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
-        <Dialog open={showDialog} onOpenChange={(open) => {
-          setShowDialog(open);
-          if (!open) resetForm();
-        }}>
-          <DialogTrigger asChild>
-            <Button className="gap-2">
-              <Plus className="w-4 h-4" />
-              Add Product
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>{editingProduct ? 'Edit Product' : 'Add New Product'}</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Product Name *</Label>
-                  <Input
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Cotton T-Shirt"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label>Category *</Label>
-                  <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select category" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>{cat}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <Label>Description *</Label>
-                <Textarea
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  rows={3}
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label>Price (₹) *</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label>MRP (₹) *</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={formData.mrp}
-                    onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
-                    required
-                  />
-                </div>
-                <div>
-                  <Label>SKU *</Label>
-                  <Input
-                    value={formData.sku}
-                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
-                    placeholder="PROD-001"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Fee Calculation Display */}
-              {fees && (
-                <Card className="bg-blue-50 border-blue-200">
-                  <CardHeader>
-                    <CardTitle className="text-sm flex items-center gap-2">
-                      <Info className="w-4 h-4" />
-                      Fee Breakdown
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Product Price:</span>
-                      <span className="font-semibold">₹{formData.price}</span>
-                    </div>
-                    <div className="flex justify-between text-red-600">
-                      <span>Platform Fee ({platformSettings.platform_fee_percentage}%):</span>
-                      <span>-₹{fees.platformFee.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-red-600">
-                      <span>Promotion Fee ({platformSettings.promotion_fee_percentage}%):</span>
-                      <span>-₹{fees.promotionFee.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-green-600 font-bold text-base pt-2 border-t">
-                      <span>Your Earnings:</span>
-                      <span>₹{fees.yourEarnings.toFixed(2)}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Images Section */}
-              <div>
-                <Label className="flex items-center gap-2 mb-2">
-                  <ImageIcon className="w-4 h-4" />
-                  Product Images
-                </Label>
-                <div className="space-y-3">
-                  <div className="flex gap-2">
-                    <Input
-                      value={imageUrl}
-                      onChange={(e) => setImageUrl(e.target.value)}
-                      placeholder="Enter image URL (e.g., https://example.com/image.jpg)"
-                    />
-                    <Button type="button" onClick={handleAddImage} variant="outline">
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add
-                    </Button>
-                  </div>
-                  {formData.images.length > 0 && (
-                    <div className="grid grid-cols-4 gap-3">
-                      {formData.images.map((img, index) => (
-                        <div key={index} className="relative group">
-                          <img 
-                            src={img} 
-                            alt={`Product ${index + 1}`} 
-                            className="w-full h-24 object-cover rounded-lg border"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImage(index)}
-                            className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Videos Section */}
-              <div>
-                <Label className="flex items-center gap-2 mb-2">
-                  <Video className="w-4 h-4" />
-                  Product Videos
-                </Label>
-                <div className="space-y-3">
-                  <div className="flex gap-2">
-                    <Input
-                      value={videoUrl}
-                      onChange={(e) => setVideoUrl(e.target.value)}
-                      placeholder="Enter video URL (YouTube, Vimeo, etc.)"
-                    />
-                    <Button type="button" onClick={handleAddVideo} variant="outline">
-                      <Plus className="w-4 h-4 mr-1" />
-                      Add
-                    </Button>
-                  </div>
-                  {formData.videos.length > 0 && (
-                    <div className="space-y-2">
-                      {formData.videos.map((video, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-                          <div className="flex items-center gap-2 flex-1 overflow-hidden">
-                            <Video className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                            <span className="text-sm truncate">{video}</span>
-                          </div>
-                          <Button
-                            type="button"
-                            onClick={() => handleRemoveVideo(index)}
-                            variant="ghost"
-                            size="sm"
-                            className="text-red-500 hover:text-red-600"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex gap-2 pt-4">
-                <Button type="submit" className="flex-1">
-                  {editingProduct ? 'Update Product' : 'Create Product'}
-                </Button>
-                <Button type="button" variant="outline" onClick={() => {
-                  setShowDialog(false);
-                  resetForm();
-                }}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Card className="mb-5"><CardContent className="p-3 sm:p-4"><div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" /><Input className="pl-9" value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="Search name, brand or SKU" /></div></CardContent></Card>
+        {error ? <Card><CardContent className="p-10 text-center"><p className="text-red-700" role="alert">{error}</p><Button className="mt-4" variant="outline" onClick={fetchProducts}>Try again</Button></CardContent></Card> : loading ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[1,2,3,4].map(item => <div key={item} className="h-64 animate-pulse rounded-xl bg-stone-200" />)}</div> : products.length === 0 ? <Card><CardContent className="flex flex-col items-center py-14"><Package className="mb-3 h-12 w-12 text-stone-400" /><p>No matching fragrances</p><Button className="mt-4" onClick={() => setShowDialog(true)}>Add your first fragrance</Button></CardContent></Card> : <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{products.map(product => <Card key={product.id} className="overflow-hidden"><div className="aspect-[4/3] bg-stone-100"><img src={product.images?.[0] || '/placeholder-perfume.svg'} alt={product.name} className="h-full w-full object-contain p-5" /></div><CardContent className="p-4"><div className="flex flex-wrap gap-2"><Badge variant={product.is_active ? 'default' : 'secondary'}>{product.is_active ? 'Active' : 'Inactive'}</Badge>{product.is_featured && <Badge variant="outline">Featured</Badge>}</div><h2 className="mt-3 truncate text-lg font-semibold">{product.name}</h2><p className="text-sm text-stone-500">{product.brand} · {product.fragrance_family || product.category}</p><div className="mt-3 flex items-baseline gap-2"><span className="font-semibold">{money(product.price)}</span><span className="text-sm text-stone-400 line-through">{money(product.mrp)}</span></div><p className="mt-2 text-xs text-stone-500">{product.variants?.length || 0} sizes · SKU {product.sku}</p><div className="mt-4 flex gap-2"><Button variant="outline" className="flex-1" onClick={() => openEdit(product)}><Edit className="mr-2 h-4 w-4" />Edit</Button><Button variant="outline" size="icon" onClick={() => deleteProduct(product.id)} aria-label={`Deactivate ${product.name}`}><Trash2 className="h-4 w-4 text-red-600" /></Button></div></CardContent></Card>)}</div>}
+        {pages > 1 && <div className="mt-6 flex items-center justify-center gap-3"><Button variant="outline" size="icon" disabled={page <= 1} onClick={() => setPage(value => value - 1)}><ChevronLeft className="h-4 w-4" /></Button><span className="text-sm">Page {page} of {pages}</span><Button variant="outline" size="icon" disabled={page >= pages} onClick={() => setPage(value => value + 1)}><ChevronRight className="h-4 w-4" /></Button></div>}
       </div>
-
-      {/* Products Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {products.map((product) => (
-          <Card key={product.id}>
-            <CardContent className="p-4">
-              {product.images?.[0] && (
-                <img
-                  src={product.images[0]}
-                  alt={product.name}
-                  className="w-full h-48 object-cover rounded-lg mb-3"
-                />
-              )}
-              <h3 className="font-semibold text-lg mb-2">{product.name}</h3>
-              <p className="text-sm text-gray-600 mb-2 line-clamp-2">{product.description}</p>
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-lg font-bold">₹{product.price}</span>
-                <span className="text-sm text-gray-500 line-through">₹{product.mrp}</span>
-              </div>
-              <div className="flex gap-2 text-xs text-gray-500 mb-3">
-                <span className="px-2 py-1 bg-gray-100 rounded">{product.category}</span>
-                {product.images && <span className="px-2 py-1 bg-blue-100 text-blue-600 rounded">{product.images.length} images</span>}
-                {product.videos?.length > 0 && <span className="px-2 py-1 bg-purple-100 text-purple-600 rounded">{product.videos.length} videos</span>}
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleEdit(product)}
-                  className="flex-1 gap-2"
-                >
-                  <Edit className="w-4 h-4" />
-                  Edit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleDelete(product.id)}
-                  className="gap-2 text-red-500 hover:text-red-600"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {products.length === 0 && (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Plus className="w-16 h-16 text-gray-300 mb-4" />
-            <p className="text-gray-500 mb-4">No products added yet</p>
-            <Button onClick={() => setShowDialog(true)}>Add Your First Product</Button>
-          </CardContent>
-        </Card>
-      )}
-    </div>
+    </main>
   );
 }
+
+function Field({ label, onChange, required, ...props }) { return <div><Label>{label}{required ? ' *' : ''}</Label><Input className="mt-1" required={required} onChange={event => onChange(event.target.value)} {...props} /></div>; }
+function NumberField({ label, onChange, required, ...props }) { return <Field label={label} type="number" min="0" step="0.01" required={required} onChange={onChange} {...props} />; }
+function TextField({ label, onChange, required, ...props }) { return <div><Label>{label}{required ? ' *' : ''}</Label><Textarea className="mt-1" rows={3} required={required} onChange={event => onChange(event.target.value)} {...props} /></div>; }
+function SelectField({ label, value, values, onChange, optional }) { return <div><Label>{label}</Label><Select value={value || undefined} onValueChange={onChange}><SelectTrigger className="mt-1"><SelectValue placeholder={optional ? 'Not specified' : `Select ${label.toLowerCase()}`} /></SelectTrigger><SelectContent>{values.map(item => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></div>; }

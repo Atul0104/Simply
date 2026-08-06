@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
@@ -12,22 +12,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ArrowLeft, CheckCircle, MapPin, Plus, Home, Briefcase, Truck, CreditCard, Wallet, Tag, Check, X, AlertCircle, Smartphone, Building } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import AddressFormFields from '@/components/address/AddressFormFields';
+import { cleanAddress, validateAddress } from '@/lib/addressValidation';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function CheckoutPage() {
   const { user, token } = useAuth();
   const navigate = useNavigate();
+  const checkoutIdempotencyKey = useRef(
+    window.crypto?.randomUUID?.() || `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
   const [loading, setLoading] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [orderId, setOrderId] = useState('');
   const [step, setStep] = useState(1); // 1: Address, 2: Payment
   
-  // Platform settings (GST)
-  const [platformSettings, setPlatformSettings] = useState({
-    gst_percentage: 18.0,
-    platform_fee_percentage: 2.0
-  });
+  const [quote, setQuote] = useState(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [quoteError, setQuoteError] = useState('');
   
   // Address state
   const [savedAddresses, setSavedAddresses] = useState([]);
@@ -47,12 +50,14 @@ export default function CheckoutPage() {
     address_type: 'home',
     is_default: false
   });
+  const [addressErrors, setAddressErrors] = useState({});
   const [pincodeLoading, setPincodeLoading] = useState(false);
   
   // Payment state
   const [paymentMethod, setPaymentMethod] = useState('cod');
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [razorpayAvailable, setRazorpayAvailable] = useState(false);
+  const [demoPaymentAvailable, setDemoPaymentAvailable] = useState(false);
   
   // Coupon state
   const [couponCode, setCouponCode] = useState('');
@@ -61,16 +66,13 @@ export default function CheckoutPage() {
 
   const cart = JSON.parse(localStorage.getItem('cart') || '[]');
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const shipping = subtotal > 500 ? 0 : 50;
-  
-  // GST Calculation
-  const gstAmount = (subtotal * platformSettings.gst_percentage) / 100;
-  const total = subtotal + shipping + gstAmount - couponDiscount;
+  const shipping = Number(quote?.shipping_charge || 0);
+  const gstAmount = Number(quote?.tax_amount || 0);
+  const total = Number(quote?.total_amount ?? subtotal);
 
   useEffect(() => {
     if (user) {
       fetchSavedAddresses();
-      fetchPlatformSettings();
       checkRazorpayAvailability();
     }
   }, [user]);
@@ -86,20 +88,12 @@ export default function CheckoutPage() {
     };
   }, []);
 
-  const fetchPlatformSettings = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/platform-settings`);
-      setPlatformSettings(response.data);
-    } catch (error) {
-      console.error('Error fetching platform settings:', error);
-    }
-  };
-
   const checkRazorpayAvailability = async () => {
     try {
-      // Check if Razorpay is configured by trying to create a test order
-      // This is a simple check - if the endpoint fails with 503, Razorpay is not configured
-      setRazorpayAvailable(true); // Optimistic - will be set to false if payment fails
+      const response = await axios.get(`${API_URL}/payments/config`);
+      setRazorpayAvailable(Boolean(response.data.configured));
+      setDemoPaymentAvailable(Boolean(response.data.demo_available));
+      if (response.data.demo_available && !response.data.configured) setPaymentMethod('demo');
     } catch (error) {
       setRazorpayAvailable(false);
     }
@@ -136,17 +130,22 @@ export default function CheckoutPage() {
   };
 
   const handlePincodeChange = async (pincode) => {
-    setAddressForm({ ...addressForm, pincode });
     if (pincode.length === 6) {
       setPincodeLoading(true);
       try {
         const response = await axios.get(`${API_URL}/pincode/${pincode}`);
+        if (!response.data.delivery_available) {
+          setAddressForm(prev => ({ ...prev, city: '', state: '' }));
+          toast.error('Delivery is not currently available for this pincode');
+          setPincodeLoading(false);
+          return;
+        }
         setAddressForm(prev => ({
           ...prev,
           city: response.data.city,
           state: response.data.state
         }));
-        toast.success('Address details fetched!');
+        toast.success('Delivery location confirmed');
       } catch (error) {
         toast.error('Could not fetch address details');
       }
@@ -155,8 +154,10 @@ export default function CheckoutPage() {
   };
 
   const handleAddNewAddress = async () => {
-    if (!addressForm.name || !addressForm.phone || !addressForm.pincode || !addressForm.address_line1 || !addressForm.city || !addressForm.state) {
-      toast.error('Please fill all required fields');
+    const errors = validateAddress(addressForm);
+    setAddressErrors(errors);
+    if (Object.keys(errors).length) {
+      toast.error('Please correct the highlighted address fields');
       return;
     }
 
@@ -170,7 +171,7 @@ export default function CheckoutPage() {
         return;
       }
       
-      const response = await axios.post(`${API_URL}/addresses`, addressForm, {
+      const response = await axios.post(`${API_URL}/addresses`, cleanAddress(addressForm), {
         headers: { Authorization: `Bearer ${authToken}` }
       });
       toast.success('Address added successfully');
@@ -204,12 +205,9 @@ export default function CheckoutPage() {
     }
 
     try {
-      const response = await axios.get(`${API_URL}/coupons/validate/${couponCode}`, {
-        params: { order_amount: subtotal }
-      });
-      setCouponDiscount(response.data.discount);
-      setCouponApplied(response.data);
-      toast.success(`Coupon applied! You saved ₹${response.data.discount}`);
+      const nextQuote = await fetchQuote(couponCode);
+      setCouponApplied({ code: couponCode });
+      toast.success(`Coupon applied! You saved ₹${nextQuote.discount_amount}`);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Invalid coupon code');
     }
@@ -219,6 +217,7 @@ export default function CheckoutPage() {
     setCouponCode('');
     setCouponDiscount(0);
     setCouponApplied(null);
+    fetchQuote(null).catch(() => {});
     toast.success('Coupon removed');
   };
 
@@ -226,12 +225,36 @@ export default function CheckoutPage() {
     return savedAddresses.find(a => a.id === selectedAddressId);
   };
 
+  const fetchQuote = async (code = couponApplied?.code || null) => {
+    const address = getSelectedAddress();
+    if (!address) throw new Error('Select a delivery address first');
+    setQuoteLoading(true); setQuoteError('');
+    try {
+      const response = await axios.post(`${API_URL}/checkout/quote`, {
+        items: cart.map(({ product_id, variant_id, size, color, quantity }) => ({ product_id, variant_id, size, color, quantity })),
+        pincode: address.pincode, state: address.state, coupon_code: code || null,
+      });
+      setAddressErrors({});
+      setQuote(response.data); setCouponDiscount(response.data.discount_amount || 0);
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.detail || error.message || 'Unable to calculate checkout total';
+      setQuote(null); setQuoteError(message); throw error;
+    } finally { setQuoteLoading(false); }
+  };
+
+  useEffect(() => {
+    if (selectedAddressId && savedAddresses.length) fetchQuote(couponApplied?.code).catch(() => {});
+  }, [selectedAddressId, savedAddresses.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const createOrder = async () => {
     const selectedAddress = getSelectedAddress();
     
     const orderData = {
       items: cart,
       total_amount: total,
+      payment_method: paymentMethod === 'cod' ? 'cod' : 'online',
+      coupon_code: couponApplied?.code || null,
       shipping_address: {
         name: selectedAddress.name,
         phone: selectedAddress.phone,
@@ -244,7 +267,10 @@ export default function CheckoutPage() {
     };
 
     const response = await axios.post(`${API_URL}/orders`, orderData, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Idempotency-Key': checkoutIdempotencyKey.current,
+      }
     });
     return response.data;
   };
@@ -266,7 +292,7 @@ export default function CheckoutPage() {
       const paymentOrderResponse = await axios.post(
         `${API_URL}/payments/create-order`,
         {
-          amount: total,
+          amount: order.total_amount,
           order_id: order.id,
           notes: {
             order_id: order.id,
@@ -350,6 +376,23 @@ export default function CheckoutPage() {
       return;
     }
 
+    if (paymentMethod === 'demo') {
+      setPaymentProcessing(true);
+      try {
+        const order = await createOrder();
+        await axios.post(`${API_URL}/payments/demo-confirm`, { internal_order_id: order.id }, { headers: { Authorization: `Bearer ${token}` } });
+        setOrderId(order.id);
+        setOrderPlaced(true);
+        localStorage.setItem('cart', '[]');
+        toast.success('Demo payment approved. Order confirmed!');
+      } catch (error) {
+        toast.error(error.response?.data?.detail || 'Demo order could not be completed');
+      } finally {
+        setPaymentProcessing(false);
+      }
+      return;
+    }
+
     // If online payment method selected, use Razorpay
     if (paymentMethod !== 'cod') {
       handleRazorpayPayment();
@@ -399,7 +442,7 @@ export default function CheckoutPage() {
           transition={{ duration: 0.5 }}
         >
           <Card className="max-w-md w-full">
-            <CardContent className="p-8 text-center">
+            <CardContent className="p-5 text-center sm:p-8">
               <motion.div
                 initial={{ scale: 0 }}
                 animate={{ scale: 1 }}
@@ -408,9 +451,9 @@ export default function CheckoutPage() {
                 <CheckCircle className="w-20 h-20 text-green-500 mx-auto mb-4" />
               </motion.div>
               <h2 className="text-2xl font-bold mb-2">Order Placed Successfully!</h2>
-              <p className="text-gray-600 mb-1">Order ID: <span className="font-mono font-semibold">{orderId}</span></p>
+              <p className="text-gray-600 mb-1">Order ID: <span className="break-all font-mono font-semibold">{orderId}</span></p>
               <p className="text-sm text-gray-500 mb-6">We'll send you updates via email and SMS</p>
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row">
                 <Button onClick={() => navigate('/customer/orders')} className="flex-1" data-testid="view-orders-btn">
                   View Orders
                 </Button>
@@ -427,22 +470,22 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-5xl mx-auto px-4 py-6">
+      <div className="max-w-5xl mx-auto px-3 py-4 sm:px-4 sm:py-6">
         <Button variant="ghost" onClick={() => navigate('/customer/cart')} className="mb-4" data-testid="back-btn">
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Cart
         </Button>
         
-        <h1 className="text-3xl font-bold mb-6">Checkout</h1>
+        <h1 className="mb-5 text-2xl font-bold sm:mb-6 sm:text-3xl">Checkout</h1>
         
         {/* Progress Steps */}
-        <div className="flex items-center justify-center mb-8">
+        <div className="mb-6 flex items-center justify-center sm:mb-8">
           <div className={`flex items-center gap-2 ${step >= 1 ? 'text-blue-600' : 'text-gray-400'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 1 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
               <MapPin className="w-4 h-4" />
             </div>
             <span className="font-medium">Address</span>
           </div>
-          <div className={`w-16 h-1 mx-2 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`} />
+          <div className={`mx-2 h-1 w-8 sm:w-16 ${step >= 2 ? 'bg-blue-600' : 'bg-gray-200'}`} />
           <div className={`flex items-center gap-2 ${step >= 2 ? 'text-blue-600' : 'text-gray-400'}`}>
             <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step >= 2 ? 'bg-blue-600 text-white' : 'bg-gray-200'}`}>
               <CreditCard className="w-4 h-4" />
@@ -451,7 +494,7 @@ export default function CheckoutPage() {
           </div>
         </div>
         
-        <div className="grid lg:grid-cols-3 gap-6">
+        <div className="grid gap-4 lg:grid-cols-3 lg:gap-6">
           <div className="lg:col-span-2">
             <AnimatePresence mode="wait">
               {step === 1 && (
@@ -544,11 +587,11 @@ export default function CheckoutPage() {
                   {/* Selected Address Summary */}
                   <Card>
                     <CardContent className="p-4">
-                      <div className="flex justify-between items-start">
-                        <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
                           <p className="text-sm text-gray-500 mb-1">Delivering to:</p>
                           <p className="font-medium">{getSelectedAddress()?.name}</p>
-                          <p className="text-sm text-gray-600">
+                          <p className="break-words text-sm text-gray-600">
                             {getSelectedAddress()?.address_line1}, {getSelectedAddress()?.city} - {getSelectedAddress()?.pincode}
                           </p>
                         </div>
@@ -566,6 +609,13 @@ export default function CheckoutPage() {
                     </CardHeader>
                     <CardContent>
                       <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod} className="space-y-3">
+                        {demoPaymentAvailable && <div className="flex items-center gap-3 rounded-lg border-2 border-violet-200 bg-violet-50 p-3 hover:bg-violet-100">
+                          <RadioGroupItem value="demo" id="demo-payment" />
+                          <label htmlFor="demo-payment" className="flex flex-1 cursor-pointer items-center gap-3">
+                            <CreditCard className="h-5 w-5 text-violet-600" />
+                            <div className="min-w-0"><p className="font-medium text-violet-900">Demo payment</p><p className="text-sm text-violet-700">Instantly approve a test order—no money charged</p></div>
+                          </label>
+                        </div>}
                         <div className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50">
                           <RadioGroupItem value="cod" id="cod" />
                           <label htmlFor="cod" className="flex-1 cursor-pointer flex items-center gap-3">
@@ -666,14 +716,14 @@ export default function CheckoutPage() {
                       </Button>
                     </div>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex flex-col gap-2 min-[380px]:flex-row">
                       <Input
                         placeholder="Enter coupon code"
                         value={couponCode}
                         onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                         className="flex-1"
                       />
-                      <Button variant="outline" onClick={handleApplyCoupon}>Apply</Button>
+                      <Button variant="outline" onClick={handleApplyCoupon} className="shrink-0">Apply</Button>
                     </div>
                   )}
                 </div>
@@ -690,7 +740,7 @@ export default function CheckoutPage() {
                     </span>
                   </div>
                   <div className="flex justify-between text-gray-600">
-                    <span>GST ({platformSettings.gst_percentage}%)</span>
+                    <span>GST ({quote?.tax_percentage || 0}%{quote?.tax_inclusive ? ', included' : ''})</span>
                     <span>₹{gstAmount.toFixed(0)}</span>
                   </div>
                   {couponDiscount > 0 && (
@@ -709,7 +759,7 @@ export default function CheckoutPage() {
                   <Button
                     onClick={handlePlaceOrder}
                     className="w-full h-12 text-lg"
-                    disabled={loading || paymentProcessing || !selectedAddressId}
+                    disabled={loading || paymentProcessing || quoteLoading || Boolean(quoteError) || !quote || !selectedAddressId}
                     data-testid="place-order-btn"
                   >
                     {loading || paymentProcessing ? (
@@ -719,10 +769,11 @@ export default function CheckoutPage() {
                     )}
                   </Button>
                 )}
-                
-                {subtotal < 500 && (
+                {quoteLoading && <p className="text-center text-sm text-stone-500">Recalculating price, tax and delivery…</p>}
+                {quoteError && <p className="text-center text-sm text-red-600" role="alert">{quoteError}</p>}
+                {quote?.delivery?.estimated_delivery_days && (
                   <p className="text-sm text-center text-gray-500">
-                    Add ₹{(500 - subtotal).toFixed(0)} more for free shipping
+                    Estimated delivery in {quote.delivery.estimated_delivery_days} days · {quote.delivery.cod_available ? 'COD available' : 'Prepaid only'}
                   </p>
                 )}
               </CardContent>
@@ -737,7 +788,15 @@ export default function CheckoutPage() {
           <DialogHeader>
             <DialogTitle>Add New Address</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <AddressFormFields
+            form={addressForm}
+            setForm={setAddressForm}
+            errors={addressErrors}
+            setErrors={setAddressErrors}
+            onPincodeChange={handlePincodeChange}
+            pincodeLoading={pincodeLoading}
+          />
+          {false && <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label>Full Name *</Label>
@@ -833,7 +892,7 @@ export default function CheckoutPage() {
               />
               <Label htmlFor="is_default_new">Set as default address</Label>
             </div>
-          </div>
+          </div>}
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewAddressDialog(false)} disabled={savingAddress}>Cancel</Button>
             <Button onClick={handleAddNewAddress} disabled={savingAddress}>

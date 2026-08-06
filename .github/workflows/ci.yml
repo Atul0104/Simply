@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r backend/requirements.txt
+      - run: python -m py_compile backend/server.py backend/migrations/*.py
+      - run: pytest tests -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm audit --omit=dev --audit-level=critical
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+        env:
+          REACT_APP_BACKEND_URL: http://localhost:8000
+
+  browser-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: pip install -r backend/requirements.txt
+      - run: npm ci
+        working-directory: frontend
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Start test API
+        working-directory: backend
+        env:
+          APP_ENV: test
+          USE_MOCK_DB: "true"
+          MONGO_URL: mongodb://localhost:27017
+          DB_NAME: perfurm_e2e
+          JWT_SECRET_KEY: ci-test-secret-not-for-production
+          CORS_ORIGINS: http://localhost:3000
+        run: |
+          python -m uvicorn server:app --host 127.0.0.1 --port 8000 > ../backend-e2e.log 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:8000/health && exit 0
+            sleep 1
+          done
+          cat ../backend-e2e.log
+          exit 1
+      - run: npm run test:e2e
+        working-directory: frontend
+        env:
+          CI: "true"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-quality-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+            backend-e2e.log
+          if-no-files-found: ignore

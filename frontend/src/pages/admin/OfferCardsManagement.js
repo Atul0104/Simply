@@ -7,13 +7,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Trash2, Tag } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Tag } from 'lucide-react';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function OfferCardsManagement() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [offers, setOffers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
@@ -83,7 +85,8 @@ export default function OfferCardsManagement() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-3 sm:p-6">
+      <Button variant="ghost" onClick={() => navigate('/admin')} className="-ml-2"><ArrowLeft className="mr-2 h-4 w-4" />Back to Dashboard</Button>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Offer Cards Management</h1>

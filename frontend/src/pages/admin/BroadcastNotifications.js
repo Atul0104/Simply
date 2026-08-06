@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Send, Users, Store, Truck, UserCheck } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle2, RefreshCw, Send, Users, Store, Truck, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
@@ -17,6 +17,8 @@ export default function BroadcastNotifications() {
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [outbox, setOutbox] = useState(null);
+  const [outboxLoading, setOutboxLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     message: '',
@@ -33,10 +35,37 @@ export default function BroadcastNotifications() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    fetchOutbox();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
     if (recipientType === 'specific') {
       fetchUsers();
     }
   }, [recipientType]);
+
+  const fetchOutbox = async () => {
+    setOutboxLoading(true);
+    try {
+      const response = await axios.get(`${API_URL}/admin/notifications/outbox`);
+      setOutbox(response.data);
+    } catch (_) {
+      setOutbox(null);
+    } finally {
+      setOutboxLoading(false);
+    }
+  };
+
+  const retryOutbox = async () => {
+    try {
+      const response = await axios.post(`${API_URL}/admin/notifications/outbox/retry-dead`);
+      toast.success(`${response.data.queued} delivery jobs queued for retry`);
+      fetchOutbox();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Delivery jobs could not be retried');
+    }
+  };
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -103,6 +132,7 @@ export default function BroadcastNotifications() {
       setFormData({ title: '', message: '', type: 'admin_broadcast', link_url: '' });
       setSelectedRoles([]);
       setSelectedUserIds([]);
+      fetchOutbox();
     } catch (error) {
       toast.error('Failed to send notifications');
     } finally {
@@ -130,6 +160,22 @@ export default function BroadcastNotifications() {
         </Button>
         
         <h1 className="text-3xl font-bold mb-6">Send Notifications</h1>
+
+        <Card className="mb-6">
+          <CardContent className="p-4 sm:p-5">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  {outbox?.delivery_enabled && (outbox.email_configured || outbox.sms_configured) ? <CheckCircle2 className="h-5 w-5 text-emerald-600" /> : <AlertTriangle className="h-5 w-5 text-amber-600" />}
+                  <h2 className="font-semibold">External delivery outbox</h2>
+                </div>
+                <p className="mt-1 text-sm text-gray-500">In-app delivery is always available. Email and SMS require enabled provider credentials.</p>
+              </div>
+              <div className="flex gap-2"><Button type="button" variant="outline" size="sm" onClick={fetchOutbox} disabled={outboxLoading}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button type="button" variant="outline" size="sm" onClick={retryOutbox} disabled={!outbox?.delivery_enabled || ((outbox.counts?.dead || 0) + (outbox.counts?.blocked_configuration || 0) === 0)}>Retry blocked</Button></div>
+            </div>
+            {outbox && <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">{['pending','processing','delivered','blocked_configuration','dead'].map(status => <div key={status} className="rounded-lg bg-gray-50 p-3"><p className="text-xs capitalize text-gray-500">{status.replaceAll('_', ' ')}</p><p className="mt-1 text-xl font-semibold">{outbox.counts?.[status] || 0}</p></div>)}</div>}
+          </CardContent>
+        </Card>
         
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Recipient Selection */}

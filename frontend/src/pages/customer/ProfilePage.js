@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ChevronLeft, User, Package, MapPin, Heart, Star, Edit, Plus, Trash2, Home, Briefcase, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
+import AddressFormFields from '@/components/address/AddressFormFields';
+import { cleanAddress, validateAddress } from '@/lib/addressValidation';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
@@ -40,6 +42,7 @@ export default function ProfilePage() {
     address_type: 'home',
     is_default: false
   });
+  const [addressErrors, setAddressErrors] = useState({});
   const [pincodeLoading, setPincodeLoading] = useState(false);
 
   useEffect(() => {
@@ -89,7 +92,6 @@ export default function ProfilePage() {
   };
 
   const handlePincodeChange = async (pincode) => {
-    setAddressForm({ ...addressForm, pincode });
     if (pincode.length === 6) {
       setPincodeLoading(true);
       try {
@@ -108,19 +110,22 @@ export default function ProfilePage() {
   };
 
   const handleAddressSubmit = async () => {
-    if (!addressForm.name || !addressForm.phone || !addressForm.pincode || !addressForm.address_line1 || !addressForm.city || !addressForm.state) {
-      toast.error('Please fill all required fields');
+    const errors = validateAddress(addressForm);
+    setAddressErrors(errors);
+    if (Object.keys(errors).length) {
+      toast.error('Please correct the highlighted address fields');
       return;
     }
 
     try {
+      const payload = cleanAddress(addressForm);
       if (editingAddress) {
-        await axios.put(`${API_URL}/addresses/${editingAddress.id}`, addressForm, {
+        await axios.put(`${API_URL}/addresses/${editingAddress.id}`, payload, {
           headers: { Authorization: `Bearer ${token}` }
         });
         toast.success('Address updated successfully');
       } else {
-        await axios.post(`${API_URL}/addresses`, addressForm, {
+        await axios.post(`${API_URL}/addresses`, payload, {
           headers: { Authorization: `Bearer ${token}` }
         });
         toast.success('Address added successfully');
@@ -162,6 +167,7 @@ export default function ProfilePage() {
   };
 
   const openEditAddress = (address) => {
+    setAddressErrors({});
     setEditingAddress(address);
     setAddressForm({
       name: address.name,
@@ -179,6 +185,7 @@ export default function ProfilePage() {
   };
 
   const resetAddressForm = () => {
+    setAddressErrors({});
     setAddressForm({
       name: '',
       phone: '',
@@ -331,7 +338,15 @@ export default function ProfilePage() {
                     <DialogHeader>
                       <DialogTitle>{editingAddress ? 'Edit Address' : 'Add New Address'}</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4 py-4">
+                    <AddressFormFields
+                      form={addressForm}
+                      setForm={setAddressForm}
+                      errors={addressErrors}
+                      setErrors={setAddressErrors}
+                      onPincodeChange={handlePincodeChange}
+                      pincodeLoading={pincodeLoading}
+                    />
+                    {false && <div className="space-y-4 py-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label>Full Name *</Label>
@@ -432,7 +447,7 @@ export default function ProfilePage() {
                         />
                         <Label htmlFor="is_default">Set as default address</Label>
                       </div>
-                    </div>
+                    </div>}
                     <DialogFooter>
                       <Button variant="outline" onClick={() => setAddressDialogOpen(false)}>Cancel</Button>
                       <Button onClick={handleAddressSubmit}>

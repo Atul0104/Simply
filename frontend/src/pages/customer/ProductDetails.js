@@ -6,23 +6,14 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ArrowLeft, Package, Heart, Star, Share2, MapPin, Truck, RotateCcw, Shield, ChevronRight, Plus, Minus, Zap, Store, MessageCircle, Check, X, ShoppingCart, Bell } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import BottleLoader from '@/components/BottleLoader';
+import Seo from '@/components/Seo';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
-const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-const defaultColors = [
-  { name: 'Black', hex: '#000000' },
-  { name: 'White', hex: '#FFFFFF' },
-  { name: 'Red', hex: '#EF4444' },
-  { name: 'Blue', hex: '#3B82F6' },
-  { name: 'Green', hex: '#22C55E' },
-  { name: 'Navy', hex: '#1E3A8A' }
-];
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -33,28 +24,33 @@ export default function ProductDetails() {
   const [reviewSummary, setReviewSummary] = useState(null);
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedSize, setSelectedSize] = useState('');
-  const [selectedColor, setSelectedColor] = useState('black');
   const [quantity, setQuantity] = useState(1);
   const [pincode, setPincode] = useState('');
   const [deliveryInfo, setDeliveryInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [showImageZoom, setShowImageZoom] = useState(false);
-  const [showSizeGuide, setShowSizeGuide] = useState(false);
   const [notifyMe, setNotifyMe] = useState(false);
 
-  const colorImages = {
-    black: product?.images?.[0] || 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=900',
-    white: 'https://images.unsplash.com/photo-1519741497674-611481863552?w=900',
-    red: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?w=900',
-    blue: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=900',
-  };
-
   useEffect(() => {
-    fetchProduct();
-    fetchReviews();
-    fetchSimilar();
-    addToRecentlyViewed();
+    const loadProduct = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/products/${id}`);
+        const loadedProduct = response.data;
+        setProduct(loadedProduct);
+        const firstVariant = loadedProduct.variants?.find((variant) => variant.is_active !== false);
+        setSelectedSize(firstVariant
+          ? (firstVariant.label || (firstVariant.size_ml ? `${firstVariant.size_ml} ml` : firstVariant.id))
+          : (loadedProduct.sizes?.[0] || ''));
+        addToRecentlyViewed(loadedProduct.id);
+        await Promise.all([fetchReviews(loadedProduct.id), fetchSimilar(loadedProduct.id)]);
+      } catch (error) {
+        console.error('Error fetching product:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadProduct();
   }, [id]);
 
   useEffect(() => {
@@ -64,22 +60,11 @@ export default function ProductDetails() {
     }
   }, [product]);
 
-  const fetchProduct = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/products/${id}`);
-      setProduct(response.data);
-      setLoading(false);
-    } catch (error) {
-      console.error('Error fetching product:', error);
-      setLoading(false);
-    }
-  };
-
-  const fetchReviews = async () => {
+  const fetchReviews = async (productId) => {
     try {
       const [reviewsRes, summaryRes] = await Promise.all([
-        axios.get(`${API_URL}/reviews/product/${id}`),
-        axios.get(`${API_URL}/reviews/product/${id}/summary`)
+        axios.get(`${API_URL}/reviews/product/${productId}`),
+        axios.get(`${API_URL}/reviews/product/${productId}/summary`)
       ]);
       setReviews(reviewsRes.data);
       setReviewSummary(summaryRes.data);
@@ -88,19 +73,19 @@ export default function ProductDetails() {
     }
   };
 
-  const fetchSimilar = async () => {
+  const fetchSimilar = async (productId) => {
     try {
-      const response = await axios.get(`${API_URL}/products/similar/${id}`);
+      const response = await axios.get(`${API_URL}/products/similar/${productId}`);
       setSimilar(response.data);
     } catch (error) {
       console.error('Error fetching similar products:', error);
     }
   };
 
-  const addToRecentlyViewed = () => {
+  const addToRecentlyViewed = (productId) => {
     const recent = JSON.parse(localStorage.getItem('recentlyViewed') || '[]');
-    const filtered = recent.filter(item => item !== id);
-    filtered.unshift(id);
+    const filtered = recent.filter(item => item !== productId);
+    filtered.unshift(productId);
     localStorage.setItem('recentlyViewed', JSON.stringify(filtered.slice(0, 10)));
   };
 
@@ -119,28 +104,43 @@ export default function ProductDetails() {
     }
   };
 
-  const checkDelivery = () => {
-    if (pincode.length === 6) {
-      // Mock delivery check
-      setDeliveryInfo({
-        available: true,
-        estimatedDays: Math.floor(Math.random() * 5) + 3,
-        cod: Math.random() > 0.3
-      });
-      toast.success('Delivery available!');
-    } else {
+  const checkDelivery = async () => {
+    if (!/^\d{6}$/.test(pincode)) {
       toast.error('Please enter valid 6-digit pincode');
+      return;
+    }
+    try {
+      const response = await axios.get(`${API_URL}/pincode/${pincode}`);
+      setDeliveryInfo({
+        available: response.data.delivery_available,
+        estimatedDays: response.data.estimated_delivery_days,
+        cod: response.data.cod_available,
+        deliveryCharge: response.data.delivery_charge,
+      });
+      if (response.data.delivery_available) toast.success('Delivery is available');
+      else toast.error('Delivery is not currently available for this pincode');
+    } catch (error) {
+      setDeliveryInfo(null);
+      toast.error(error.response?.data?.detail || 'Unable to check delivery');
     }
   };
 
   const addToCart = () => {
+    if (product?.is_coming_soon) { toast.info('This fragrance is coming soon'); return false; }
     if (!selectedSize) {
       toast.error('Please select a size');
       return;
     }
 
+    const selectedVariant = product.variants?.find((variant) =>
+      variant.is_active !== false && (variant.label === selectedSize || `${variant.size_ml} ml` === selectedSize || variant.id === selectedSize)
+    );
+    if (product.variants?.length && !selectedVariant) {
+      toast.error('Please select an available bottle size');
+      return false;
+    }
     const cart = JSON.parse(localStorage.getItem('cart') || '[]');
-    const existingItem = cart.find(item => item.product_id === product.id && item.size === selectedSize);
+    const existingItem = cart.find(item => item.product_id === product.id && item.variant_id === selectedVariant?.id && item.size === selectedSize);
     
     if (existingItem) {
       existingItem.quantity += quantity;
@@ -149,21 +149,23 @@ export default function ProductDetails() {
         product_id: product.id,
         seller_id: product.seller_id,
         name: product.name,
-        price: product.price,
-        image: colorImages[selectedColor],
+        price: selectedVariant?.price ?? product.price,
+        mrp: selectedVariant?.mrp ?? product.mrp,
+        variant_id: selectedVariant?.id,
+        variant_sku: selectedVariant?.sku,
+        image: selectedVariant?.image || product.images?.[0],
         size: selectedSize,
-        color: selectedColor,
         quantity: quantity
       });
     }
     
     localStorage.setItem('cart', JSON.stringify(cart));
     toast.success('Added to cart!');
+    return true;
   };
 
   const buyNow = () => {
-    addToCart();
-    navigate('/customer/cart');
+    if (addToCart()) navigate('/customer/cart');
   };
 
   const shareProduct = async () => {
@@ -197,24 +199,45 @@ export default function ProductDetails() {
     );
   }
 
-  const discount = Math.round(((product.mrp - product.price) / product.mrp) * 100);
+  const activeVariants = product.variants?.filter((variant) => variant.is_active !== false) || [];
+  const selectedVariant = activeVariants.find((variant) =>
+    variant.label === selectedSize || `${variant.size_ml} ml` === selectedSize || variant.id === selectedSize
+  );
+  const displayPrice = Number(selectedVariant?.price ?? product.price);
+  const displayMrp = Number(selectedVariant?.mrp ?? product.mrp);
+  const discount = displayMrp > 0 ? Math.round(((displayMrp - displayPrice) / displayMrp) * 100) : 0;
   const avgRating = reviewSummary?.average_rating || 4.2;
   const totalReviews = reviewSummary?.total_reviews || 0;
-  const inStock = Math.random() > 0.2; // Mock stock check
+  const inStock = selectedVariant ? Number(selectedVariant.stock_quantity ?? 0) > 0 : Number(product.stock_quantity ?? 1) > 0;
+  const displayImage = selectedVariant?.image || product.images?.[selectedImage] || product.images?.[0];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <Seo
+        title={product.seo_title || product.name}
+        description={product.seo_description || product.short_description || product.description}
+        canonicalPath={`/customer/product/${product.slug || product.id}`}
+        image={product.images?.[0]}
+        type="product"
+        schema={{
+          '@context': 'https://schema.org', '@type': 'Product', name: product.name,
+          description: product.short_description || product.description, image: product.images,
+          sku: product.sku, brand: { '@type': 'Brand', name: product.brand || 'Perfurm' },
+          offers: { '@type': 'Offer', priceCurrency: 'INR', price: displayPrice, availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', url: `${window.location.origin}/customer/product/${product.slug || product.id}` },
+          ...(product.review_count > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: product.average_rating, reviewCount: product.review_count } } : {}),
+        }}
+      />
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
         {/* Breadcrumb */}
-        <div className="flex items-center gap-2 text-sm text-gray-600 mb-4">
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mb-4 overflow-hidden whitespace-nowrap">
           <span onClick={() => navigate('/')} className="cursor-pointer hover:text-blue-600">Home</span>
           <ChevronRight className="w-4 h-4" />
           <span onClick={() => navigate(`/customer/category/${product.category}`)} className="cursor-pointer hover:text-blue-600">{product.category}</span>
           <ChevronRight className="w-4 h-4" />
-          <span className="text-gray-900">{product.name}</span>
+          <span className="text-gray-900 truncate">{product.name}</span>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid lg:grid-cols-2 gap-5 lg:gap-8">
           {/* Images Section */}
           <div className="space-y-4">
             <Card>
@@ -222,10 +245,10 @@ export default function ProductDetails() {
                 <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 relative group">
                   <AnimatePresence mode="wait">
                     <motion.img
-                      key={selectedColor}
-                      src={colorImages[selectedColor]}
+                      key={displayImage}
+                      src={displayImage}
                       alt={product.name}
-                      className="w-full h-full object-cover cursor-zoom-in"
+                      className="w-full h-full object-contain mix-blend-multiply cursor-zoom-in p-3 sm:p-6"
                       onClick={() => setShowImageZoom(true)}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -258,37 +281,10 @@ export default function ProductDetails() {
                 )}
 
                 {/* Action Buttons */}
-                <div className="grid grid-cols-2 gap-2 mt-4">
+                <div className="mt-4">
                   <Button variant="outline" onClick={shareProduct} className="w-full">
                     <Share2 className="w-4 h-4 mr-2" /> Share
                   </Button>
-                  <Dialog open={showSizeGuide} onOpenChange={setShowSizeGuide}>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" className="w-full">Size Guide</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Size Guide</DialogTitle>
-                      </DialogHeader>
-                      <div className="space-y-4">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="border-b">
-                              <th className="text-left py-2">Size</th>
-                              <th className="text-left py-2">Chest (inches)</th>
-                              <th className="text-left py-2">Length (inches)</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr className="border-b"><td className="py-2">S</td><td>36-38</td><td>27</td></tr>
-                            <tr className="border-b"><td className="py-2">M</td><td>38-40</td><td>28</td></tr>
-                            <tr className="border-b"><td className="py-2">L</td><td>40-42</td><td>29</td></tr>
-                            <tr className="border-b"><td className="py-2">XL</td><td>42-44</td><td>30</td></tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
                 </div>
               </CardContent>
             </Card>
@@ -331,16 +327,16 @@ export default function ProductDetails() {
             <Card className="bg-gradient-to-r from-blue-50 to-purple-50">
               <CardContent className="p-4">
                 <div className="flex items-baseline gap-3 mb-2">
-                  <span className="text-4xl font-bold text-green-600">₹{product.price.toLocaleString()}</span>
-                  {product.mrp > product.price && (
+                  <span className="text-4xl font-bold text-green-600">₹{displayPrice.toLocaleString()}</span>
+                  {displayMrp > displayPrice && (
                     <>
-                      <span className="text-xl text-gray-500 line-through">₹{product.mrp.toLocaleString()}</span>
+                      <span className="text-xl text-gray-500 line-through">₹{displayMrp.toLocaleString()}</span>
                       <Badge className="bg-red-500 text-lg px-3">{discount}% off</Badge>
                     </>
                   )}
                 </div>
-                <p className="text-sm text-gray-600">+ ₹50 Secured Packaging Fee</p>
-                <p className="text-green-600 font-semibold mt-2">You save ₹{(product.mrp - product.price).toLocaleString()}!</p>
+                <p className="text-sm text-gray-600">Shipping is calculated from your delivery pincode at checkout</p>
+                {displayMrp > displayPrice && <p className="text-green-600 font-semibold mt-2">You save ₹{(displayMrp - displayPrice).toLocaleString()}!</p>}
               </CardContent>
             </Card>
 
@@ -365,45 +361,27 @@ export default function ProductDetails() {
               </CardContent>
             </Card>
 
-            {/* Color Selection */}
-            <div>
-              <h3 className="font-semibold mb-3">Select Color</h3>
-              <div className="flex flex-wrap gap-3">
-                {(product.colors && product.colors.length > 0 ? product.colors : defaultColors).map((color) => (
-                  <button
-                    key={color.name || color}
-                    onClick={() => setSelectedColor(color.name || color)}
-                    className={`w-12 h-12 rounded-full border-2 transition-all flex items-center justify-center ${
-                      selectedColor === (color.name || color) ? 'border-blue-600 ring-2 ring-blue-200 scale-110' : 'border-gray-300'
-                    }`}
-                    style={{ backgroundColor: color.hex || color }}
-                    title={color.name || color}
-                    data-testid={`color-${color.name || color}`}
-                  >
-                    {selectedColor === (color.name || color) && (
-                      <Check className={`w-5 h-5 ${(color.hex || '').toLowerCase() === '#ffffff' || color.name?.toLowerCase() === 'white' ? 'text-black' : 'text-white'}`} />
-                    )}
-                  </button>
-                ))}
-              </div>
-              <p className="text-sm text-gray-500 mt-2">Selected: {selectedColor}</p>
-            </div>
-
             {/* Size Selection */}
             <div>
               <h3 className="font-semibold mb-3">Select Size</h3>
               <div className="flex flex-wrap gap-2">
-                {(product.sizes && product.sizes.length > 0 ? product.sizes : sizes).map((size) => (
+                {(activeVariants.length > 0 ? activeVariants.map((variant) => ({
+                  key: variant.id,
+                  label: variant.label || (variant.size_ml ? `${variant.size_ml} ml` : variant.sku),
+                  price: variant.price,
+                  disabled: Number(variant.stock_quantity ?? 0) <= 0,
+                })) : (product.sizes || []).map((size) => ({ key: size, label: size, disabled: false }))).map((option) => (
                   <button
-                    key={size}
-                    onClick={() => setSelectedSize(size)}
+                    key={option.key}
+                    onClick={() => setSelectedSize(option.label)}
+                    disabled={option.disabled}
                     className={`px-6 py-3 border-2 rounded-lg font-semibold transition-all ${
-                      selectedSize === size
+                      selectedSize === option.label
                         ? 'border-blue-600 bg-blue-50 text-blue-600'
-                        : 'border-gray-300 hover:border-gray-400'
+                        : 'border-gray-300 hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-40'
                     }`}
                   >
-                    {size}
+                    {option.label}{option.price != null ? ` · ₹${Number(option.price).toLocaleString()}` : ''}
                   </button>
                 ))}
               </div>
@@ -452,14 +430,15 @@ export default function ProductDetails() {
                 </div>
                 {deliveryInfo && (
                   <div className="space-y-2 text-sm">
-                    <p className="flex items-center gap-2 text-green-600">
+                    {deliveryInfo.available ? <p className="flex items-center gap-2 text-green-600">
                       <Check className="w-4 h-4" /> Delivery in {deliveryInfo.estimatedDays} days
-                    </p>
-                    {deliveryInfo.cod && (
+                    </p> : <p className="flex items-center gap-2 text-red-600"><X className="w-4 h-4" /> Delivery unavailable for this pincode</p>}
+                    {deliveryInfo.available && deliveryInfo.cod && (
                       <p className="flex items-center gap-2">
                         <Check className="w-4 h-4 text-green-600" /> Cash on Delivery available
                       </p>
                     )}
+                    {deliveryInfo.available && Number(deliveryInfo.deliveryCharge) > 0 && <p>Delivery charge: ₹{deliveryInfo.deliveryCharge}</p>}
                   </div>
                 )}
               </CardContent>
@@ -484,19 +463,19 @@ export default function ProductDetails() {
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-3 sticky bottom-0 bg-white p-4 -mx-4 border-t">
+            <div className="flex gap-2 sm:gap-3 sticky bottom-0 z-20 bg-white/95 backdrop-blur p-3 sm:p-4 -mx-3 sm:-mx-4 border-t">
               <Button
                 onClick={addToCart}
                 variant="outline"
-                className="flex-1 h-14 text-lg"
-                disabled={!inStock || !selectedSize}
+                className="flex-1 h-12 sm:h-14 text-sm sm:text-lg px-2 sm:px-4"
+                disabled={product.is_coming_soon || !inStock || !selectedSize}
               >
-                <ShoppingCart className="w-5 h-5 mr-2" /> Add to Cart
+                <ShoppingCart className="w-5 h-5 mr-2" /> {product.is_coming_soon ? 'Coming Soon' : 'Add to Cart'}
               </Button>
               <Button
                 onClick={buyNow}
-                className="flex-1 h-14 text-lg bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
-                disabled={!inStock || !selectedSize}
+                className="flex-1 h-12 sm:h-14 text-sm sm:text-lg px-2 sm:px-4 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                disabled={product.is_coming_soon || !inStock || !selectedSize}
               >
                 <Zap className="w-5 h-5 mr-2" /> Buy Now
               </Button>
@@ -506,10 +485,10 @@ export default function ProductDetails() {
 
         {/* Additional Details Tabs */}
         <Card className="mt-8">
-          <CardContent className="p-6">
+          <CardContent className="p-3 sm:p-6">
             <Tabs defaultValue="details">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="details">Product Details</TabsTrigger>
+              <TabsList className="flex w-full justify-start overflow-x-auto no-scrollbar">
+                <TabsTrigger value="details" className="flex-shrink-0">Product Details</TabsTrigger>
                 <TabsTrigger value="specifications">Specifications</TabsTrigger>
                 <TabsTrigger value="reviews">Reviews ({totalReviews})</TabsTrigger>
                 <TabsTrigger value="qa">Q&A</TabsTrigger>
@@ -533,7 +512,7 @@ export default function ProductDetails() {
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                      <span>Available in multiple colors</span>
+                      <span>Available in carefully selected bottle sizes</span>
                     </li>
                   </ul>
                 </div>
@@ -673,7 +652,7 @@ export default function ProductDetails() {
       {/* Image Zoom Modal */}
       <Dialog open={showImageZoom} onOpenChange={setShowImageZoom}>
         <DialogContent className="max-w-4xl">
-          <img src={colorImages[selectedColor]} alt={product.name} className="w-full" />
+          <img src={displayImage} alt={product.name} className="w-full" />
         </DialogContent>
       </Dialog>
     </div>
