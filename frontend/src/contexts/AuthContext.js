@@ -6,6 +6,15 @@ const AuthContext = createContext();
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 axios.defaults.withCredentials = true;
 
+const readCookie = (name) => document.cookie.split('; ').find(row => row.startsWith(`${name}=`))?.split('=').slice(1).join('=');
+axios.interceptors.request.use(config => {
+  if (config.url?.includes('/auth/refresh') || config.url?.includes('/auth/logout')) {
+    const csrf = readCookie(process.env.REACT_APP_CSRF_COOKIE_NAME || 'perfurm_csrf');
+    if (csrf) config.headers.set ? config.headers.set('X-CSRF-Token', decodeURIComponent(csrf)) : (config.headers['X-CSRF-Token'] = decodeURIComponent(csrf));
+  }
+  return config;
+});
+
 const getErrorMessage = (error, fallback) => {
   const detail = error?.response?.data?.detail;
   if (typeof detail === 'string') return detail;

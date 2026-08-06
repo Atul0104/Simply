@@ -77,16 +77,16 @@ export default function CheckoutPage() {
     }
   }, [user]);
 
-  // Load Razorpay script
-  useEffect(() => {
+  const loadRazorpay = () => new Promise((resolve, reject) => {
+    if (window.Razorpay) return resolve(true);
+    const existing = document.querySelector('script[data-perfurm-payment="razorpay"]');
+    if (existing) { existing.addEventListener('load', () => resolve(true), { once: true }); existing.addEventListener('error', reject, { once: true }); return; }
     const script = document.createElement('script');
     script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-    script.async = true;
+    script.async = true; script.dataset.perfurmPayment = 'razorpay';
+    script.onload = () => resolve(true); script.onerror = () => reject(new Error('Payment provider could not load'));
     document.body.appendChild(script);
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
+  });
 
   const checkRazorpayAvailability = async () => {
     try {
@@ -276,6 +276,7 @@ export default function CheckoutPage() {
   };
 
   const handleRazorpayPayment = async () => {
+    try { await loadRazorpay(); } catch (_) { toast.error('Secure payment checkout could not load. Try again.'); return; }
     const selectedAddress = getSelectedAddress();
     if (!selectedAddress) {
       toast.error('Please select a delivery address');

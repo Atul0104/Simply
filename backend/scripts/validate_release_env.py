@@ -24,6 +24,13 @@ def main() -> int:
     if mode not in {"staging", "production"}: errors.append("APP_ENV must be staging or production")
     if env.get("USE_MOCK_DB", "").lower() != "false": errors.append("USE_MOCK_DB must be false")
     if env.get("ENABLE_DEMO_OTP", "").lower() != "false": errors.append("ENABLE_DEMO_OTP must be false")
+    if env.get("COOKIE_SECURE", "").lower() != "true": errors.append("COOKIE_SECURE must be true")
+    if env.get("COOKIE_SAMESITE", "").lower() not in {"lax", "strict", "none"}: errors.append("COOKIE_SAMESITE must be lax, strict or none")
+    for key in ("CONSENT_POLICY_VERSION", "COOKIE_POLICY_VERSION", "PRIVACY_POLICY_VERSION"):
+        if not env.get(key): errors.append(f"{key} is required")
+    try:
+        if not 1 <= int(env.get("CONSENT_EXPIRY_DAYS", "0")) <= 365: errors.append("CONSENT_EXPIRY_DAYS must be between 1 and 365")
+    except ValueError: errors.append("CONSENT_EXPIRY_DAYS must be an integer")
     secret = env.get("JWT_SECRET_KEY", "")
     if len(secret) < 32 or "GENERATE_" in secret or "replace" in secret.lower(): errors.append("JWT_SECRET_KEY must be a real random secret of 32+ characters")
     metrics = env.get("METRICS_TOKEN", "")

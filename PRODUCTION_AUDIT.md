@@ -140,8 +140,27 @@ Production launch status: **blocked** until the P0 items below are completed and
 - Customer account controls now provide authenticated password rotation with refresh-session revocation, a sensitive-field-filtered portable JSON export, and password-confirmed deletion requests blocked by active orders.
 - Targeted coupons now support first purchase, delivered-order milestones and explicit customers; public coupon responses exclude private assignments and authenticated customers receive only eligible codes.
 - Environment-configured reverse geocoding, secret-free Admin integration readiness, stricter release validation and current-location address confirmation are implemented.
-- Latest local verification: 41 backend tests pass, the optimized frontend builds, and the desktop/tablet/mobile Chromium quality matrix passes after targeted mobile carousel revalidation. External-provider certification remains gated on real staging credentials.
+- Latest local verification (2026-08-06): 44 backend tests pass and the optimized frontend builds. The prior desktop/tablet/mobile Chromium matrix passed; the newly added consent UI still requires the documented cross-browser/network inspection in staging. External-provider certification remains gated on real staging credentials.
 - Privacy operations now have a paginated permission-gated admin queue, delegated review, Super-Admin-only fulfilment, checkout blocking after approval, configurable retention windows and transactional anonymization with audit history.
+- Versioned consent management now provides equal accept/reject/manage actions, granular choices, footer/settings access, GPC enforcement, anonymous/authenticated evidence, Super-Admin-only policy publishing/history, optional-storage withdrawal cleanup, creator analytics/media gating and explicit-action payment-script loading.
+
+## Phase 20 privacy audit addendum
+
+### Closed high-risk findings
+
+- **High:** persistent campaign visitor identifier and measurement calls occurred before consent. Both are now analytics-gated.
+- **High:** external campaign videos autoplayed before consent. Marketing media is now replaced by an opt-in placeholder until allowed.
+- **Medium:** Razorpay checkout code loaded merely by visiting checkout. It now loads only after an explicit online-payment action.
+- **High:** refresh-cookie endpoints lacked an explicit CSRF token. Rotating refresh/logout now require a matching double-submit token and approved origin.
+- **Medium:** consent had no durable, versioned evidence or withdrawal surface. The API/UI now store append-only decisions, expire/version choices, support GPC and expose footer/account controls.
+
+### Open privacy/release findings
+
+- **High / production blocker:** wishlist localStorage is not yet consent-gated. Privacy counsel must either approve its classification as strictly requested functionality or engineering must provide a functional-consent/in-memory fallback.
+- **Medium:** remote catalogue/editorial images disclose ordinary request metadata to third-party hosts. Migrate licensed assets to the controlled first-party CDN.
+- **Medium:** policy wording, lawful bases, retention periods, international-transfer terms and vendor contracts require qualified legal/privacy approval.
+- **Medium:** consent UI needs automated Playwright network assertions plus physical iOS/Android, Firefox and WebKit accessibility testing.
+- **Medium:** retention cleanup exists as a dry-run/apply script but production scheduling, legal-hold integration and deletion evidence need operations qualification.
 
 ## Required implementation sequence
 

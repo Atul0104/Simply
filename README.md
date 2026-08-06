@@ -11,12 +11,16 @@ Perfurm is a single-brand perfume-commerce application built with React, FastAPI
 - Admin catalogue, inventory, order/refund, customer, coupon, offer, CMS and analytics operations.
 - Super Admin staff/RBAC, privacy operations, audit records and complete Admin-mode access.
 - Short-lived access tokens, rotating HttpOnly refresh sessions, throttling, security headers and provider webhook verification.
+- Versioned, granular cookie consent with GPC support, withdrawal cleanup and pre-consent blocking for optional tracking/media.
 
 ## Documentation
 
 - [Application manual](APPLICATION_MANUAL.md)
 - [Deployment, provider setup and rollback](DEPLOYMENT.md)
 - [Production audit and launch gates](PRODUCTION_AUDIT.md)
+- [Architecture](ARCHITECTURE.md), [API](API_DOCUMENTATION.md), [security](SECURITY.md) and [test guide](TESTING_GUIDE.md)
+- [Consent operation](CONSENT_MANAGEMENT.md), [cookie inventory](COOKIE_INVENTORY.md), [cookie policy](COOKIE_POLICY.md) and [privacy policy](PRIVACY_POLICY.md)
+- [Production checklist](PRODUCTION_CHECKLIST.md) and [deployment guide](DEPLOYMENT_GUIDE.md)
 - Interactive API documentation: `http://localhost:8000/docs` outside production
 
 ## Local development

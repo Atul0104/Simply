@@ -95,7 +95,22 @@ if APP_ENV in {"staging", "production"} and ENABLE_DEMO_OTP:
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("ACCESS_TOKEN_EXPIRE_MINUTES", "15"))
 REFRESH_TOKEN_EXPIRE_DAYS = int(os.environ.get("REFRESH_TOKEN_EXPIRE_DAYS", "30"))
-REFRESH_COOKIE_NAME = "perfurm_refresh"
+REFRESH_COOKIE_NAME = os.environ.get("REFRESH_COOKIE_NAME", "perfurm_refresh")
+CSRF_COOKIE_NAME = os.environ.get("CSRF_COOKIE_NAME", "perfurm_csrf")
+COOKIE_DOMAIN = os.environ.get("COOKIE_DOMAIN") or None
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", str(APP_ENV in {"staging", "production"})).lower() == "true"
+COOKIE_SAMESITE = os.environ.get("COOKIE_SAMESITE", "lax").lower()
+CONSENT_POLICY_VERSION = os.environ.get("CONSENT_POLICY_VERSION", "2026-08-06.1")
+COOKIE_POLICY_VERSION = os.environ.get("COOKIE_POLICY_VERSION", "2026-08-06.1")
+PRIVACY_POLICY_VERSION = os.environ.get("PRIVACY_POLICY_VERSION", "2026-08-06.1")
+CONSENT_EXPIRY_DAYS = int(os.environ.get("CONSENT_EXPIRY_DAYS", "180"))
+GPC_SUPPORT = os.environ.get("GPC_SUPPORT", "true").lower() == "true"
+if COOKIE_SAMESITE not in {"lax", "strict", "none"}:
+    raise RuntimeError("COOKIE_SAMESITE must be lax, strict, or none")
+if APP_ENV in {"staging", "production"} and not COOKIE_SECURE:
+    raise RuntimeError("COOKIE_SECURE must be true outside development")
+if not 1 <= CONSENT_EXPIRY_DAYS <= 365:
+    raise RuntimeError("CONSENT_EXPIRY_DAYS must be between 1 and 365")
 
 # Payment gateways (configure in .env)
 razorpay_client = None
@@ -174,6 +189,28 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
+
+class ConsentPreferences(BaseModel):
+    necessary: Literal[True] = True
+    functional: bool = False
+    analytics: bool = False
+    marketing: bool = False
+    personalization: bool = False
+
+class ConsentRecordCreate(BaseModel):
+    preferences: ConsentPreferences
+    anonymous_id: Optional[str] = Field(default=None, min_length=16, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
+    source: Literal["banner", "preference_center", "settings", "gpc"] = "banner"
+    consent_policy_version: str = Field(min_length=1, max_length=50)
+    cookie_policy_version: str = Field(min_length=1, max_length=50)
+    privacy_policy_version: str = Field(min_length=1, max_length=50)
+
+class ConsentPolicyUpdate(BaseModel):
+    banner_title: str = Field(min_length=3, max_length=120)
+    banner_description: str = Field(min_length=10, max_length=800)
+    consent_expiry_days: int = Field(ge=1, le=365)
+    gpc_support: bool = True
+    enabled_categories: List[Literal["functional", "analytics", "marketing", "personalization"]]
 
 ADMIN_ROLE_PERMISSIONS = {
     "super_admin": ["*"],
@@ -1186,16 +1223,34 @@ async def create_refresh_session(user_id: str, request: Request, response: Respo
     response.set_cookie(
         key=REFRESH_COOKIE_NAME, value=raw_token,
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        httponly=True, secure=APP_ENV in {"staging", "production"},
-        samesite="lax", path="/api/auth",
+        httponly=True, secure=COOKIE_SECURE, domain=COOKIE_DOMAIN,
+        samesite=COOKIE_SAMESITE, path="/api/auth",
+    )
+    csrf_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME, value=csrf_token, max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        httponly=False, secure=COOKIE_SECURE, domain=COOKIE_DOMAIN,
+        samesite=COOKIE_SAMESITE, path="/",
     )
     return session["id"]
 
 def clear_refresh_cookie(response: Response) -> None:
     response.delete_cookie(
         REFRESH_COOKIE_NAME, path="/api/auth",
-        httponly=True, secure=APP_ENV in {"staging", "production"}, samesite="lax",
+        httponly=True, secure=COOKIE_SECURE, domain=COOKIE_DOMAIN, samesite=COOKIE_SAMESITE,
     )
+    response.delete_cookie(CSRF_COOKIE_NAME, path="/", secure=COOKIE_SECURE, domain=COOKIE_DOMAIN, samesite=COOKIE_SAMESITE)
+
+def require_cookie_csrf(request: Request) -> None:
+    """Double-submit protection for endpoints authenticated by the refresh cookie."""
+    csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME, "")
+    csrf_header = request.headers.get("X-CSRF-Token", "")
+    if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
+        raise HTTPException(status_code=403, detail="CSRF validation failed")
+    origin = request.headers.get("Origin")
+    allowed = {item.strip().rstrip("/") for item in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",") if item.strip()}
+    if origin and origin.rstrip("/") not in allowed and not (APP_ENV == "development" and origin.endswith(".trycloudflare.com")):
+        raise HTTPException(status_code=403, detail="Request origin is not allowed")
 
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> Dict[str, Any]:
     try:
@@ -1416,6 +1471,7 @@ async def refresh_session(request: Request, response: Response):
     raw_token = request.cookies.get(REFRESH_COOKIE_NAME)
     if not raw_token:
         raise HTTPException(status_code=401, detail="Refresh session is missing")
+    require_cookie_csrf(request)
     now = datetime.now(timezone.utc)
     session = await db.auth_sessions.find_one({
         "token_hash": token_digest(raw_token), "revoked_at": None,
@@ -1443,6 +1499,8 @@ async def refresh_session(request: Request, response: Response):
 
 @api_router.post("/auth/logout")
 async def logout_session(request: Request, response: Response):
+    if request.cookies.get(REFRESH_COOKIE_NAME):
+        require_cookie_csrf(request)
     raw_token = request.cookies.get(REFRESH_COOKIE_NAME)
     if raw_token:
         await db.auth_sessions.update_one(
@@ -6482,6 +6540,86 @@ async def delete_ticker_message(
     await db.ticker_messages.delete_one({"id": ticker_id})
     return {"message": "Ticker deleted"}
 
+
+# ============== PRIVACY AND CONSENT ==============
+def default_consent_config() -> Dict[str, Any]:
+    return {
+        "id": "consent_policy", "consent_policy_version": CONSENT_POLICY_VERSION,
+        "cookie_policy_version": COOKIE_POLICY_VERSION, "privacy_policy_version": PRIVACY_POLICY_VERSION,
+        "consent_expiry_days": CONSENT_EXPIRY_DAYS, "gpc_support": GPC_SUPPORT,
+        "enabled_categories": ["functional", "analytics", "marketing", "personalization"],
+        "banner_title": "Your privacy, your choice",
+        "banner_description": "We use necessary technology to run Perfurm. Optional technology helps with preferences, measurement and relevant offers only when you allow it.",
+        "updated_at": datetime.now(timezone.utc), "published_at": datetime.now(timezone.utc),
+    }
+
+async def effective_consent_config() -> Dict[str, Any]:
+    return await db.consent_policy.find_one({"id": "consent_policy"}, {"_id": 0}) or default_consent_config()
+
+async def optional_request_user(request: Request) -> Optional[Dict[str, Any]]:
+    authorization = request.headers.get("Authorization", "")
+    if not authorization.startswith("Bearer "):
+        return None
+    try:
+        payload = jwt.decode(authorization[7:], SECRET_KEY, algorithms=[ALGORITHM])
+        return await db.users.find_one({"id": payload.get("sub"), "is_active": True}, {"_id": 0, "password_hash": 0})
+    except JWTError:
+        return None
+
+@api_router.get("/privacy/consent/config")
+async def get_consent_config():
+    config = await effective_consent_config()
+    return {**config, "necessary": {"enabled": True, "mutable": False}}
+
+@api_router.post("/privacy/consent", status_code=201)
+async def record_consent(payload: ConsentRecordCreate, request: Request):
+    config = await effective_consent_config()
+    expected = (config["consent_policy_version"], config["cookie_policy_version"], config["privacy_policy_version"])
+    supplied = (payload.consent_policy_version, payload.cookie_policy_version, payload.privacy_policy_version)
+    if supplied != expected:
+        raise HTTPException(status_code=409, detail="Consent policy changed; review the current preferences")
+    user = await optional_request_user(request)
+    now = datetime.now(timezone.utc)
+    record = {
+        "id": str(uuid.uuid4()), "user_id": user.get("id") if user else None,
+        "anonymous_id_hash": privacy_key(payload.anonymous_id) if payload.anonymous_id else None,
+        "preferences": payload.preferences.model_dump(), "source": payload.source,
+        "consent_policy_version": supplied[0], "cookie_policy_version": supplied[1],
+        "privacy_policy_version": supplied[2], "created_at": now,
+        "expires_at": now + timedelta(days=config["consent_expiry_days"]),
+        "user_agent_hash": privacy_key(request.headers.get("User-Agent", "unknown")[:300]),
+    }
+    await db.consent_records.insert_one(record.copy())
+    subject = {"user_id": record["user_id"]} if record["user_id"] else {"anonymous_id_hash": record["anonymous_id_hash"]}
+    if subject.get(next(iter(subject))) is not None:
+        await db.consent_current.update_one(subject, {"$set": record}, upsert=True)
+    record.pop("anonymous_id_hash", None)
+    record.pop("user_agent_hash", None)
+    return {k: v for k, v in record.items() if k != "_id"}
+
+@api_router.get("/privacy/consent/me")
+async def get_my_consent(user: Dict[str, Any] = Depends(get_current_user)):
+    record = await db.consent_current.find_one({"user_id": user["id"]}, {"_id": 0, "anonymous_id_hash": 0, "user_agent_hash": 0})
+    return record or {"preferences": None}
+
+@api_router.get("/admin/privacy/consent/config")
+async def admin_get_consent_config(user: Dict[str, Any] = Depends(require_role([UserRole.ADMIN]))):
+    return await effective_consent_config()
+
+@api_router.put("/admin/privacy/consent/config")
+async def publish_consent_config(payload: ConsentPolicyUpdate, user: Dict[str, Any] = Depends(require_super_admin)):
+    current = await effective_consent_config()
+    now = datetime.now(timezone.utc)
+    await db.consent_policy_history.insert_one({**current, "archived_at": now, "archived_by": user["id"]})
+    revision = int(str(current["consent_policy_version"]).rsplit(".", 1)[-1]) + 1
+    update = {**current, **payload.model_dump(), "consent_policy_version": f"{datetime.now(timezone.utc).date()}.{revision}", "updated_at": now, "published_at": now, "published_by": user["id"]}
+    await db.consent_policy.replace_one({"id": "consent_policy"}, update, upsert=True)
+    await db.audit_logs.insert_one({"id": str(uuid.uuid4()), "actor_id": user["id"], "action": "privacy.consent_policy.publish", "target_id": "consent_policy", "created_at": now})
+    return {k: v for k, v in update.items() if k != "_id"}
+
+@api_router.get("/admin/privacy/consent/history")
+async def consent_policy_history(user: Dict[str, Any] = Depends(require_super_admin)):
+    return await db.consent_policy_history.find({}, {"_id": 0}).sort("archived_at", -1).limit(50).to_list(50)
 
 # Include the router
 app.include_router(api_router)

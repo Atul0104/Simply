@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '@/contexts/AuthContext';
+import { useConsent } from '@/contexts/ConsentContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -14,6 +15,7 @@ import { motion } from 'framer-motion';
 const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 
 export default function SettingsPage() {
+  const { openPreferences, preferences } = useConsent();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [settings, setSettings] = useState({
@@ -136,6 +138,7 @@ export default function SettingsPage() {
       </header>
 
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
+        <Card><CardHeader><div className="flex items-center gap-2"><Shield className="h-5 w-5 text-emerald-600"/><CardTitle>Privacy and cookies</CardTitle></div><CardDescription>Review or withdraw optional tracking and personalization consent at any time.</CardDescription></CardHeader><CardContent><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-gray-600">Optional categories enabled: {preferences ? Object.entries(preferences).filter(([key, value]) => key !== 'necessary' && value).length : 0}</p><Button variant="outline" onClick={openPreferences}>Manage cookie preferences</Button></div></CardContent></Card>
         {/* Notifications */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

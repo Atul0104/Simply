@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Routes, Route, useNavigate, useLocation, Link } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '@/contexts/AuthContext';
+import { useConsent } from '@/contexts/ConsentContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -257,6 +258,7 @@ function SearchBar({ onClose }) {
 }
 
 function HomePage() {
+  const consent = useConsent();
   const [products, setProducts] = useState([]);
   const [initialLoading, setInitialLoading] = useState(true);
   const [trending, setTrending] = useState([]);
@@ -299,8 +301,11 @@ function HomePage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
-  const visitorId = useRef(localStorage.getItem('perfurm_visitor_id') || (window.crypto?.randomUUID?.() || `visitor-${Date.now()}-${Math.random()}`));
-  if (!localStorage.getItem('perfurm_visitor_id')) localStorage.setItem('perfurm_visitor_id', visitorId.current);
+  const visitorId = useRef(null);
+  if (consent.hasConsent('analytics') && !visitorId.current) {
+    visitorId.current = localStorage.getItem('perfurm_visitor_id') || (window.crypto?.randomUUID?.() || `visitor-${Date.now()}-${Math.random()}`);
+    localStorage.setItem('perfurm_visitor_id', visitorId.current);
+  }
 
   const defaultOffers = [
     { title: 'Find the scent that stays', subtitle: 'An edited collection of modern, memorable fragrance', cta: 'Explore fragrances', image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=1400', link: '/customer/category/all' },
@@ -313,13 +318,13 @@ function HomePage() {
   const popupCoupon = activeCoupons[0];
 
   useEffect(() => {
-    if (!popupCoupon || sessionStorage.getItem(`perfurm_offer_popup_${popupCoupon.id}`)) return;
+    if (!popupCoupon || (consent.hasConsent('functional') && sessionStorage.getItem(`perfurm_offer_popup_${popupCoupon.id}`))) return;
     const timer = window.setTimeout(() => setOfferPopupOpen(true), 1400);
     return () => window.clearTimeout(timer);
   }, [popupCoupon?.id]);
 
   const dismissOfferPopup = () => {
-    if (popupCoupon) sessionStorage.setItem(`perfurm_offer_popup_${popupCoupon.id}`, 'dismissed');
+    if (popupCoupon && consent.hasConsent('functional')) sessionStorage.setItem(`perfurm_offer_popup_${popupCoupon.id}`, 'dismissed');
     setOfferPopupOpen(false);
   };
 
@@ -451,7 +456,7 @@ function HomePage() {
 
   const fetchCreatorCampaigns = async () => {
     try {
-      const response = await axios.get(`${API_URL}/creator-campaigns`, { params: { visitor_id: visitorId.current } });
+      const response = await axios.get(`${API_URL}/creator-campaigns`, { params: visitorId.current ? { visitor_id: visitorId.current } : {} });
       setCreatorCampaigns(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Error fetching creator campaigns:', error);
@@ -459,6 +464,7 @@ function HomePage() {
   };
 
   const toggleCampaignLike = async (campaign) => {
+    if (!consent.hasConsent('analytics') || !visitorId.current) { consent.openPreferences(); return; }
     const previous = creatorCampaigns;
     setCreatorCampaigns(items => items.map(item => item.id === campaign.id ? { ...item, liked_by_visitor: !item.liked_by_visitor, likes: Math.max(0, (item.likes || 0) + (item.liked_by_visitor ? -1 : 1)) } : item).sort((a, b) => (b.likes || 0) - (a.likes || 0) || (a.display_order || 0) - (b.display_order || 0)));
     try {
@@ -1308,7 +1314,9 @@ function HomePage() {
               <ul className="space-y-2 text-sm text-gray-400">
                 <li><Link to="/customer/support" className="hover:text-white transition-colors">About Us</Link></li>
                 <li><Link to="/customer/support" className="hover:text-white transition-colors">Terms & Conditions</Link></li>
-                <li><Link to="/customer/support" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/cookie-policy" className="hover:text-white transition-colors">Cookie Policy</Link></li>
+              <li><button type="button" onClick={consent.openPreferences} className="hover:text-white transition-colors">Cookie preferences</button></li>
                 <li><Link to="/customer/support" className="hover:text-white transition-colors">Return Policy</Link></li>
               </ul>
             </div>
@@ -1507,10 +1515,12 @@ function MobileShopNav() {
 }
 
 function CreatorCampaignCard({ campaign, visitorId, onLike }) {
+  const consent = useConsent();
   const cardRef = useRef(null);
   const [muted, setMuted] = useState(true);
   const tracked = useRef(false);
   useEffect(() => {
+    if (!consent.hasConsent('analytics') || !visitorId) return undefined;
     const node = cardRef.current;
     if (!node || tracked.current) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
@@ -1522,16 +1532,16 @@ function CreatorCampaignCard({ campaign, visitorId, onLike }) {
     }, { threshold: 0.55 });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [campaign, visitorId]);
+  }, [campaign, visitorId, consent.preferences?.analytics]);
 
   const openCampaign = () => {
-    axios.post(`${API_URL}/creator-campaigns/${campaign.id}/events`, { visitor_id: visitorId, event_type: 'click', source: campaign.social_channel, referrer: document.referrer || null }).catch(() => {});
+    if (consent.hasConsent('analytics') && visitorId) axios.post(`${API_URL}/creator-campaigns/${campaign.id}/events`, { visitor_id: visitorId, event_type: 'click', source: campaign.social_channel, referrer: document.referrer || null }).catch(() => {});
     if (campaign.destination_url) window.open(campaign.destination_url, '_blank', 'noopener,noreferrer');
   };
 
   return <article ref={cardRef} className="relative w-[78vw] max-w-[330px] shrink-0 snap-start overflow-hidden rounded-2xl bg-stone-950 text-white shadow-lg">
     <button type="button" onClick={openCampaign} className="block w-full text-left" aria-label={`View ${campaign.title}`}>
-      {campaign.media_type === 'video' ?
+      {campaign.media_type === 'video' && !consent.hasConsent('marketing') ? <div className="flex aspect-[4/5] items-center justify-center bg-stone-900 p-6 text-center text-sm text-stone-200"><button className="underline" type="button" onClick={consent.openPreferences}>Allow marketing media to play this campaign</button></div> : campaign.media_type === 'video' ?
         <video className="aspect-[4/5] w-full object-cover" src={campaign.media_url} poster={campaign.thumbnail_url || undefined} muted={muted} autoPlay loop playsInline preload="metadata" /> :
         <img className="aspect-[4/5] w-full object-cover" src={campaign.media_url} alt={`${campaign.creator_name} campaign`} loading="lazy" />}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent p-4 pt-16">

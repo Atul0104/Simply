@@ -119,19 +119,24 @@ def test_refresh_session_rotates_and_logout_revokes_cookie():
         created = client.post("/api/auth/register", json=registration())
         assert created.status_code == 200
         original_cookie = client.cookies.get("perfurm_refresh")
+        csrf_cookie = client.cookies.get("perfurm_csrf")
         assert original_cookie
+        assert csrf_cookie
 
-        refreshed = client.post("/api/auth/refresh")
+        refreshed = client.post("/api/auth/refresh", headers={"X-CSRF-Token": csrf_cookie})
         assert refreshed.status_code == 200
         rotated_cookie = client.cookies.get("perfurm_refresh")
+        rotated_csrf = client.cookies.get("perfurm_csrf")
         assert rotated_cookie and rotated_cookie != original_cookie
+        assert rotated_csrf
 
         replay = TestClient(app)
         replay.cookies.set("perfurm_refresh", original_cookie, path="/api/auth")
-        replayed = replay.post("/api/auth/refresh")
+        replay.cookies.set("perfurm_csrf", csrf_cookie, path="/")
+        replayed = replay.post("/api/auth/refresh", headers={"X-CSRF-Token": csrf_cookie})
         assert replayed.status_code == 401
 
-        logged_out = client.post("/api/auth/logout")
+        logged_out = client.post("/api/auth/logout", headers={"X-CSRF-Token": rotated_csrf})
         assert logged_out.status_code == 200
         assert client.post("/api/auth/refresh").status_code == 401
 
