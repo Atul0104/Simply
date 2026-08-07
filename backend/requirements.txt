@@ -48,7 +48,7 @@ pymongo==4.7.2
 certifi
 pytest==9.0.2
 python-dateutil==2.9.0.post0
-python-dotenv==1.2.1
+python-dotenv==1.2.2
 python-jose==3.5.0
 python-multipart==0.0.21
 pytokens==0.3.0
