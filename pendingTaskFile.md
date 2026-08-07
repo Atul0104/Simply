@@ -147,6 +147,8 @@ Source documents: `PRODUCTION_AUDIT.md`, `PRODUCTION_CHECKLIST.md`, `LOAD_TEST_R
 
 ### Catalogue and inventory
 
+- [x] Add HTTPS multiple-image/product-video URL authoring, bounded API validation and responsive mixed-media storefront rendering.
+
 - [ ] Add safe CSV/XLSX product bulk import with validation preview and row-level errors.
 - [ ] Add product/catalogue bulk export.
 - [ ] Add inventory bulk adjustment/import with idempotency and audit history.
@@ -154,7 +156,7 @@ Source documents: `PRODUCTION_AUDIT.md`, `PRODUCTION_CHECKLIST.md`, `LOAD_TEST_R
 - [ ] Confirm variant pricing and stock update correctly for every supported bottle size.
 - [ ] Validate unique SKU, barcode, slug and product identifiers.
 - [ ] Complete taxonomy, fragrance-family, note, concentration, gender and occasion reference data.
-- [ ] Add controlled media upload, optimization, alt text, licensing and CDN publication.
+- [~] Add controlled binary media upload, optimization, alt text, licensing evidence and first-party CDN publication. HTTPS URL authoring and responsive gallery rendering are complete; managed asset ingestion remains pending.
 - [ ] Test scheduled/coming-soon catalogue publication and expiry.
 
 ### Search and discovery

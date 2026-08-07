@@ -100,3 +100,26 @@ test('mobile empty cart and wishlist recommend perfumes without a size guide', a
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Size Guide' })).toHaveCount(0);
 });
+
+test('product media gallery and ordering choices remain responsive', async ({ page }) => {
+  await page.route('**/api/products/velvet-oud-eau-de-parfum', async route => {
+    const response = await route.fetch();
+    const product = await response.json();
+    product.videos = ['https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4'];
+    await route.fulfill({ response, json: product });
+  });
+  await page.goto('/customer/product/velvet-oud-eau-de-parfum', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('heading', { name: 'Velvet Oud Eau de Parfum' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Show video 2' })).toBeVisible();
+  await page.getByRole('button', { name: 'Show video 2' }).click();
+  await expect(page.getByLabel('Velvet Oud Eau de Parfum product video')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Previous product media' })).toBeVisible();
+  const prices = [];
+  for (const size of ['10 ml', '50 ml', '100 ml']) {
+    await page.getByRole('button', { name: new RegExp(`^${size}`) }).click();
+    prices.push(await page.locator('[data-testid="product-price"]').textContent().catch(() => ''));
+  }
+  expect(new Set(prices).size).toBeGreaterThan(1);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+});

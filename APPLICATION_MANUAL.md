@@ -122,6 +122,7 @@ flowchart TD
 - Category browsing, filters, and sorting
 - Trending, most-viewed, bestseller, and related products
 - Product images, videos, specifications, notes, sizes, and reviews
+- Responsive mixed-media product galleries: up to 12 HTTPS images and 4 HTTPS hosted videos per product. Admin/Super Admin author these under **Catalogue → Add/Edit fragrance → Content**; video is customer-initiated, muted and inline rather than autoplayed.
 - Wishlist, recently viewed products, and local cart
 - Address management and pincode checks
 - Coupon validation and promotional offers
@@ -317,6 +318,12 @@ The full generated reference is available at `http://localhost:8000/docs`.
 | Analytics | seller and administrator analytics routes |
 
 ## 11. Order and Payment Integrity
+
+### Operational ownership map
+
+The customer path is guest discovery → product/size selection → cart → authenticated address → server quote → payment/COD → order confirmation → tracking/return. Catalogue and variant price/stock belong to **Catalogue** and **Inventory**; acceptance, confirmation, processing, packing/shipping, cancellation and refund belong to **Orders**; service areas and COD rules belong to **Delivery Areas**; returns belong to **Returns & Cancellations**; payment/shipping credentials remain environment-managed. Super Admin receives the same operational controls only when Admin Staff mode is enabled, while staff/permission and platform-wide analytics remain Super Admin controls.
+
+Product videos are presentation media only. They do not affect price, SKU or stock selection. The selected bottle variant remains the authoritative source of price, MRP and inventory throughout cart and checkout.
 
 ```mermaid
 flowchart TD

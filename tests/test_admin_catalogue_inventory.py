@@ -23,13 +23,15 @@ def test_admin_can_create_edit_stock_and_deactivate_single_brand_product():
             "name": f"Admin Amber {suffix}", "brand": "Perfurm", "description": "Single-brand admin product workflow.",
             "category": "Unisex", "target_category": "Unisex", "price": 790, "mrp": 990,
             "is_coming_soon": True,
-            "sku": f"ADM-{suffix}", "images": ["https://example.com/admin-amber.jpg"],
+            "sku": f"ADM-{suffix}", "images": ["https://example.com/admin-amber.jpg", "https://example.com/admin-amber-side.jpg"],
+            "videos": ["https://example.com/admin-amber-film.mp4"],
             "variants": [{"sku": f"ADM-{suffix}-10", "size_ml": 10, "label": "10 ml", "price": 790, "mrp": 990, "stock_quantity": 8, "low_stock_limit": 3}],
         }
         created = client.post("/api/admin/catalogue/products", headers=headers, json=payload)
         assert created.status_code == 200, created.text
         product = created.json(); variant = product["variants"][0]
         assert product["is_coming_soon"] is True
+        assert len(product["images"]) == 2 and product["videos"] == ["https://example.com/admin-amber-film.mp4"]
         regular_catalogue = client.get("/api/catalog/products", params={"q": suffix}).json()
         coming_catalogue = client.get("/api/catalog/products", params={"q": suffix, "coming_soon": True}).json()
         assert regular_catalogue["total"] == 0 and coming_catalogue["total"] == 1
@@ -55,3 +57,18 @@ def test_admin_can_create_edit_stock_and_deactivate_single_brand_product():
         assert deactivated.status_code == 200
         public = client.get(f"/api/products/{product['id']}")
         assert public.status_code == 200 and public.json()["is_active"] is False
+
+
+def test_catalogue_rejects_insecure_or_excessive_product_media():
+    suffix = uuid.uuid4().hex[:10]
+    with TestClient(app) as client:
+        login = client.post("/api/auth/login", json={"email": "admin@perfurm.com", "password": "admin123"})
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        base = {
+            "name": f"Media Guard {suffix}", "description": "Validates hosted product media.", "category": "Unisex",
+            "price": 790, "mrp": 990, "sku": f"MED-{suffix}", "images": ["http://example.com/insecure.jpg"],
+            "variants": [{"sku": f"MED-{suffix}-10", "size_ml": 10, "price": 790, "mrp": 990}],
+        }
+        assert client.post("/api/admin/catalogue/products", headers=headers, json=base).status_code == 422
+        base["images"] = [f"https://example.com/{index}.jpg" for index in range(13)]
+        assert client.post("/api/admin/catalogue/products", headers=headers, json=base).status_code == 422

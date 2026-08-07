@@ -434,6 +434,17 @@ class ProductCreate(BaseModel):
     seo_keywords: List[str] = Field(default_factory=list)
     canonical_url: Optional[str] = None
 
+    @model_validator(mode="after")
+    def validate_catalogue_media(self):
+        if len(self.images) > 12:
+            raise ValueError("A product can have at most 12 images")
+        if len(self.videos) > 4:
+            raise ValueError("A product can have at most 4 videos")
+        for url in [*self.images, *self.videos]:
+            if not isinstance(url, str) or not re.match(r"^https://[^\s]+$", url, re.IGNORECASE):
+                raise ValueError("Product media URLs must use HTTPS")
+        return self
+
 class Inventory(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -7034,7 +7045,7 @@ async def startup_db():
     if USE_MOCK_DB and await db.products.count_documents({}) == 0:
         now = datetime.now(timezone.utc)
         preview_products = [
-            Product(seller_id="preview-atelier", name="Velvet Oud Eau de Parfum", description="A deep oud softened by rose absolute and warm amber.", category="For Him", price=2890, mrp=3490, sku="PFM001", images=["https://images.unsplash.com/photo-1541643600914-78b084683601?w=800"], specifications={"Notes": "Oud, rose, amber", "Concentration": "Eau de Parfum"}, sizes=["10 ml", "50 ml", "100 ml"], created_at=now, updated_at=now).model_dump(),
+            Product(seller_id="preview-atelier", name="Velvet Oud Eau de Parfum", description="A deep oud softened by rose absolute and warm amber.", category="For Him", price=2890, mrp=3490, sku="PFM001", images=["https://images.unsplash.com/photo-1541643600914-78b084683601?w=800"], videos=["https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"], specifications={"Notes": "Oud, rose, amber", "Concentration": "Eau de Parfum"}, sizes=["10 ml", "50 ml", "100 ml"], created_at=now, updated_at=now).model_dump(),
             Product(seller_id="preview-atelier", name="Rose After Rain", description="Dewy petals, pink pepper and clean musk with a luminous finish.", category="For Her", price=2490, mrp=2990, sku="PFM002", images=["https://images.unsplash.com/photo-1594035910387-fea47794261f?w=800"], specifications={"Notes": "Rose, pink pepper, white musk", "Concentration": "Eau de Parfum"}, sizes=["10 ml", "50 ml", "100 ml"], created_at=now, updated_at=now).model_dump(),
             Product(seller_id="preview-studio", name="The Signature Discovery Set", description="Six fragrances spanning citrus, floral, woods, amber, musk and oud.", category="Discovery Sets", price=1190, mrp=1490, sku="PFM003", images=["https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?w=800"], specifications={"Includes": "6 × 2 ml", "Format": "Spray vials"}, sizes=["6 × 2 ml"], created_at=now, updated_at=now).model_dump(),
             Product(seller_id="preview-studio", name="Salt Skin Eau de Parfum", description="Mineral air, bergamot and sun-warmed skin in an effortless unisex scent.", category="Unisex", price=2690, mrp=3290, sku="PFM004", images=["https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=800"], specifications={"Notes": "Bergamot, sea salt, ambrette", "Concentration": "Eau de Parfum"}, sizes=["10 ml", "50 ml"], created_at=now, updated_at=now).model_dump(),

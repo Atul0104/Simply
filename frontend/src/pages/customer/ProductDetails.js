@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Package, Heart, Star, Share2, Truck, RotateCcw, Shield, ChevronRight, Plus, Minus, Zap, MessageCircle, Check, X, ShoppingCart, Bell, Sparkles, Droplets, Clock3, Wind, Award, Leaf } from 'lucide-react';
+import { Package, Heart, Star, Share2, Truck, RotateCcw, Shield, ChevronLeft, ChevronRight, Plus, Minus, Zap, MessageCircle, Check, X, ShoppingCart, Bell, Sparkles, Droplets, Clock3, Wind, Award, Leaf, Play } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import BottleLoader from '@/components/BottleLoader';
@@ -209,7 +209,14 @@ export default function ProductDetails() {
   const avgRating = reviewSummary?.average_rating || 4.2;
   const totalReviews = reviewSummary?.total_reviews || 0;
   const inStock = selectedVariant ? Number(selectedVariant.stock_quantity ?? 0) > 0 : Number(product.stock_quantity ?? 1) > 0;
-  const displayImage = selectedVariant?.image || product.images?.[selectedImage] || product.images?.[0];
+  const gallery = [
+    ...((selectedVariant?.image && !product.images?.includes(selectedVariant.image)) ? [{ type: 'image', url: selectedVariant.image }] : []),
+    ...(product.images || []).map((url) => ({ type: 'image', url })),
+    ...(product.videos || []).map((url) => ({ type: 'video', url })),
+  ];
+  const activeMedia = gallery[selectedImage] || gallery[0] || { type: 'image', url: '/placeholder-perfume.svg' };
+  const displayImage = activeMedia.type === 'image' ? activeMedia.url : product.images?.[0];
+  const selectMedia = (index) => setSelectedImage((index + gallery.length) % gallery.length);
   const toNotes = (value) => Array.isArray(value) ? value : String(value || '').split(',').map(note => note.trim()).filter(Boolean);
   const topNotes = toNotes(product.top_notes);
   const middleNotes = toNotes(product.middle_notes);
@@ -254,18 +261,10 @@ export default function ProductDetails() {
               <CardContent className="p-3 sm:p-5">
                 <div className="group relative mb-4 aspect-[4/5] max-h-[720px] overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_50%_34%,#fff_0%,#eee6da_48%,#ded2c2_100%)]">
                   <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2"><Badge className="bg-stone-950 text-white hover:bg-stone-950">{concentration}</Badge>{product.is_new_arrival && <Badge className="bg-[#7d4956] text-white">New ritual</Badge>}{discount > 0 && <Badge className="bg-white text-[#6f3b49] shadow-sm">Save {discount}%</Badge>}</div>
-                  <AnimatePresence mode="wait">
-                    <motion.img
-                      key={displayImage}
-                      src={displayImage}
-                      alt={product.name}
-                      className="h-full w-full cursor-zoom-in object-contain p-5 mix-blend-multiply transition-transform duration-700 group-hover:scale-[1.025] sm:p-10"
-                      onClick={() => setShowImageZoom(true)}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                    />
-                  </AnimatePresence>
+                   <AnimatePresence mode="wait">
+                     {activeMedia.type === 'video' ? <motion.video key={activeMedia.url} src={activeMedia.url} controls muted playsInline preload="metadata" className="h-full w-full bg-stone-950 object-contain" aria-label={`${product.name} product video`} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} /> : <motion.img key={activeMedia.url} src={activeMedia.url} alt={product.name} className="h-full w-full cursor-zoom-in object-contain p-5 mix-blend-multiply transition-transform duration-700 group-hover:scale-[1.025] sm:p-10" onClick={() => setShowImageZoom(true)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />}
+                   </AnimatePresence>
+                   {gallery.length > 1 && <><button type="button" onClick={() => selectMedia(selectedImage - 1)} className="absolute left-3 top-1/2 z-20 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/90 shadow-md" aria-label="Previous product media"><ChevronLeft className="h-5 w-5"/></button><button type="button" onClick={() => selectMedia(selectedImage + 1)} className="absolute right-3 top-1/2 z-20 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-full bg-white/90 shadow-md" aria-label="Next product media"><ChevronRight className="h-5 w-5"/></button></>}
                   <button
                     onClick={toggleWishlist}
                     className="absolute right-4 top-4 z-20 rounded-full bg-white/90 p-2.5 shadow-lg backdrop-blur transition-transform hover:scale-105"
@@ -276,17 +275,18 @@ export default function ProductDetails() {
                 </div>
 
                 {/* Thumbnail Images */}
-                {product.images && product.images.length > 1 && (
-                  <div className="flex snap-x gap-2 overflow-x-auto pb-1">
-                    {product.images.map((img, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setSelectedImage(idx)}
-                        className={`h-20 w-20 flex-shrink-0 snap-start overflow-hidden rounded-xl border-2 bg-[#eee7dd] ${
-                          selectedImage === idx ? 'border-[#6f3b49]' : 'border-transparent hover:border-stone-300'
-                        }`}
-                      >
-                        <img src={img} alt={`${product.name} view ${idx + 1}`} className="h-full w-full object-contain p-1 mix-blend-multiply" />
+                 {gallery.length > 1 && (
+                   <div className="flex snap-x snap-mandatory gap-2 overflow-x-auto overscroll-x-contain pb-1" aria-label="Product media gallery">
+                     {gallery.map((media, idx) => (
+                       <button
+                         key={`${media.type}-${media.url}`}
+                         onClick={() => setSelectedImage(idx)}
+                         className={`relative h-20 w-20 flex-shrink-0 snap-start overflow-hidden rounded-xl border-2 bg-[#eee7dd] ${
+                           selectedImage === idx ? 'border-[#6f3b49]' : 'border-transparent hover:border-stone-300'
+                         }`}
+                         aria-label={`Show ${media.type} ${idx + 1}`}
+                       >
+                         {media.type === 'video' ? <><video src={media.url} muted playsInline preload="metadata" className="h-full w-full bg-stone-900 object-cover"/><span className="absolute inset-0 grid place-items-center bg-black/20"><Play className="h-6 w-6 fill-white text-white"/></span></> : <img src={media.url} alt={`${product.name} view ${idx + 1}`} className="h-full w-full object-contain p-1 mix-blend-multiply" />}
                       </button>
                     ))}
                   </div>
@@ -330,7 +330,7 @@ export default function ProductDetails() {
             <Card className="border-[#dbcac3] bg-gradient-to-br from-[#fffaf5] to-[#f2e9e1] shadow-none">
               <CardContent className="p-5">
                 <div className="flex items-baseline gap-3 mb-2">
-                  <span className="text-4xl font-semibold tracking-tight text-[#4b2927]">₹{displayPrice.toLocaleString('en-IN')}</span>
+                  <span data-testid="product-price" className="text-4xl font-semibold tracking-tight text-[#4b2927]">₹{displayPrice.toLocaleString('en-IN')}</span>
                   {displayMrp > displayPrice && (
                     <>
                       <span className="text-lg text-stone-400 line-through">₹{displayMrp.toLocaleString('en-IN')}</span>

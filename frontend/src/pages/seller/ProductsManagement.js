@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { ArrowLeft, ChevronLeft, ChevronRight, Edit, Image as ImageIcon, Package, Plus, Search, Trash2, X } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Edit, Image as ImageIcon, Package, Play, Plus, Search, Trash2, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -74,6 +74,7 @@ export default function ProductsManagement({ adminMode = false }) {
   const [editingProduct, setEditingProduct] = useState(null);
   const [form, setForm] = useState(emptyForm());
   const [imageUrl, setImageUrl] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
   const [saving, setSaving] = useState(false);
 
   const fetchProducts = useCallback(async () => {
@@ -89,7 +90,7 @@ export default function ProductsManagement({ adminMode = false }) {
   useEffect(() => { const timer = setTimeout(fetchProducts, 250); return () => clearTimeout(timer); }, [fetchProducts]);
   useEffect(() => { axios.get(`${API_URL}/categories/list`).then(response => { if (response.data?.length) setCategories(response.data); }).catch(() => {}); }, []);
 
-  function resetForm() { setForm(emptyForm()); setEditingProduct(null); setImageUrl(''); }
+  function resetForm() { setForm(emptyForm()); setEditingProduct(null); setImageUrl(''); setVideoUrl(''); }
   function openEdit(product) { setEditingProduct(product); setForm(toForm(product)); setShowDialog(true); }
   function addVariant() {
     setForm(current => ({ ...current, variants: [...current.variants, {
@@ -169,6 +170,8 @@ export default function ProductsManagement({ adminMode = false }) {
                   <TabsContent value="content" className="space-y-4 pt-4">
                     <div><Label>Product images</Label><div className="mt-1 flex flex-col gap-2 sm:flex-row"><Input type="url" value={imageUrl} onChange={event => setImageUrl(event.target.value)} placeholder="https://…" /><Button type="button" variant="outline" onClick={() => { if (imageUrl.trim()) { setForm({ ...form, images: [...form.images, imageUrl.trim()] }); setImageUrl(''); } }}><ImageIcon className="mr-2 h-4 w-4" />Add URL</Button></div></div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{form.images.map((image, index) => <div key={`${image}-${index}`} className="group relative aspect-square overflow-hidden rounded-xl border bg-stone-100"><img src={image} alt={`Fragrance ${index + 1}`} className="h-full w-full object-contain p-2" /><Button type="button" size="icon" variant="destructive" className="absolute right-1 top-1 h-7 w-7" onClick={() => setForm({ ...form, images: form.images.filter((_, itemIndex) => itemIndex !== index) })}><X className="h-3 w-3" /></Button></div>)}</div>
+                    <div className="rounded-xl border bg-stone-50 p-3 sm:p-4"><div className="flex items-center gap-2"><Video className="h-4 w-4 text-[#7d4956]"/><Label>Product videos</Label></div><p className="mt-1 text-xs text-stone-500">Optional hosted MP4/WebM clips for bottle details or spray demonstrations. Videos do not autoplay on the product page.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><Input type="url" value={videoUrl} onChange={event => setVideoUrl(event.target.value)} placeholder="https://example.com/product-film.mp4" /><Button type="button" variant="outline" onClick={() => { if (videoUrl.trim()) { setForm({ ...form, videos: [...form.videos, videoUrl.trim()] }); setVideoUrl(''); } }}><Play className="mr-2 h-4 w-4" />Add video</Button></div></div>
+                    {form.videos.length > 0 && <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">{form.videos.map((video, index) => <div key={`${video}-${index}`} className="relative overflow-hidden rounded-xl border bg-stone-950"><video src={video} controls muted playsInline preload="metadata" className="aspect-video w-full object-contain" aria-label={`Product video ${index + 1}`} /><Button type="button" size="icon" variant="destructive" className="absolute right-2 top-2 h-8 w-8" onClick={() => setForm({ ...form, videos: form.videos.filter((_, itemIndex) => itemIndex !== index) })} aria-label={`Remove video ${index + 1}`}><X className="h-4 w-4" /></Button></div>)}</div>}
                     <div className="grid gap-4 sm:grid-cols-2"><TextField label="Ingredients" value={form.ingredients} onChange={ingredients => setForm({ ...form, ingredients })} /><TextField label="Usage instructions" value={form.usage_instructions} onChange={usage_instructions => setForm({ ...form, usage_instructions })} /><TextField label="Safety information" value={form.safety_information} onChange={safety_information => setForm({ ...form, safety_information })} /><TextField label="Manufacturer details" value={form.manufacturer_details} onChange={manufacturer_details => setForm({ ...form, manufacturer_details })} /></div>
                     <div className="grid gap-4 sm:grid-cols-3"><Field label="Country of origin" value={form.country_of_origin} onChange={country_of_origin => setForm({ ...form, country_of_origin })} /><NumberField label="Shelf life (months)" value={form.shelf_life_months} onChange={shelf_life_months => setForm({ ...form, shelf_life_months })} /><Field label="GST category / HSN" value={form.gst_category} onChange={gst_category => setForm({ ...form, gst_category })} /></div>
                   </TabsContent>
