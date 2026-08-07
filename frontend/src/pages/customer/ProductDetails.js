@@ -254,12 +254,12 @@ export default function ProductDetails() {
           <span className="text-gray-900 truncate">{product.name}</span>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(390px,.92fr)] lg:gap-10 xl:gap-14">
+        <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(390px,.92fr)] lg:gap-10 xl:gap-14">
           {/* Images Section */}
-          <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+          <div className="min-w-0 space-y-4 lg:sticky lg:top-24 lg:self-start">
             <Card className="overflow-hidden border-stone-200/80 bg-[#eee7dd] shadow-[0_24px_70px_-35px_rgba(60,38,30,.45)]">
               <CardContent className="p-3 sm:p-5">
-                <div className="group relative mb-4 aspect-[4/5] max-h-[720px] overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_50%_34%,#fff_0%,#eee6da_48%,#ded2c2_100%)]">
+                <div className="group relative mb-4 aspect-square max-h-[720px] overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_50%_34%,#fff_0%,#eee6da_48%,#ded2c2_100%)] sm:aspect-[4/5]">
                   <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2"><Badge className="bg-stone-950 text-white hover:bg-stone-950">{concentration}</Badge>{product.is_new_arrival && <Badge className="bg-[#7d4956] text-white">New ritual</Badge>}{discount > 0 && <Badge className="bg-white text-[#6f3b49] shadow-sm">Save {discount}%</Badge>}</div>
                    <AnimatePresence mode="wait">
                      {activeMedia.type === 'video' ? <motion.video key={activeMedia.url} src={activeMedia.url} controls muted playsInline preload="metadata" className="h-full w-full bg-stone-950 object-contain" aria-label={`${product.name} product video`} initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} /> : <motion.img key={activeMedia.url} src={activeMedia.url} alt={product.name} className="h-full w-full cursor-zoom-in object-contain p-5 mix-blend-multiply transition-transform duration-700 group-hover:scale-[1.025] sm:p-10" onClick={() => setShowImageZoom(true)} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />}
@@ -309,10 +309,10 @@ export default function ProductDetails() {
           </div>
 
           {/* Product Details Section */}
-          <div className="space-y-5 lg:pt-2">
+          <div className="min-w-0 space-y-5 lg:pt-2">
             <div>
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.24em] text-[#7d4956]">{product.brand || 'Perfurm'} · {scentFamily}</p>
-              <h1 className="display-serif text-4xl font-semibold leading-[1.05] sm:text-5xl">{product.name}</h1>
+              <h1 className="display-serif break-words text-3xl font-semibold leading-[1.05] sm:text-5xl">{product.name}</h1>
               <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600">{product.short_description || product.description}</p>
             </div>
 
@@ -329,7 +329,7 @@ export default function ProductDetails() {
             {/* Price */}
             <Card className="border-[#dbcac3] bg-gradient-to-br from-[#fffaf5] to-[#f2e9e1] shadow-none">
               <CardContent className="p-5">
-                <div className="flex items-baseline gap-3 mb-2">
+                <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <span data-testid="product-price" className="text-4xl font-semibold tracking-tight text-[#4b2927]">₹{displayPrice.toLocaleString('en-IN')}</span>
                   {displayMrp > displayPrice && (
                     <>
@@ -343,7 +343,7 @@ export default function ProductDetails() {
               </CardContent>
             </Card>
 
-            <div className="grid grid-cols-3 overflow-hidden rounded-2xl bg-[#211c1b] text-white shadow-sm">
+            <div className="grid min-w-0 grid-cols-3 overflow-hidden rounded-2xl bg-[#211c1b] text-white shadow-sm">
               <div className="p-3 sm:p-4"><Droplets className="h-5 w-5 text-[#d9b9ad]"/><p className="mt-2 text-xs font-semibold sm:text-sm">{concentration}</p><p className="mt-1 hidden text-xs text-white/55 sm:block">A considered concentration</p></div>
               <div className="border-x border-white/10 p-3 sm:p-4"><Sparkles className="h-5 w-5 text-[#d9b9ad]"/><p className="mt-2 text-xs font-semibold sm:text-sm">{product.target_category || 'For every story'}</p><p className="mt-1 hidden text-xs text-white/55 sm:block">Wear it your way</p></div>
               <div className="p-3 sm:p-4"><Leaf className="h-5 w-5 text-[#d9b9ad]"/><p className="mt-2 text-xs font-semibold sm:text-sm">{scentFamily}</p><p className="mt-1 hidden text-xs text-white/55 sm:block">Fragrance family</p></div>
@@ -351,7 +351,7 @@ export default function ProductDetails() {
 
             {/* Size Selection */}
             <div>
-              <div className="mb-3 flex items-end justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[#7d4956]">Choose your bottle</p><h3 className="mt-1 font-semibold">Select size</h3></div><span className="text-xs text-stone-500">Price updates with size</span></div>
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between sm:gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[#7d4956]">Choose your bottle</p><h3 className="mt-1 font-semibold">Select size</h3></div><span className="text-xs text-stone-500">Price updates with size</span></div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {(activeVariants.length > 0 ? activeVariants.map((variant) => ({
                   key: variant.id,
@@ -378,7 +378,7 @@ export default function ProductDetails() {
             {/* Quantity */}
             <div>
               <h3 className="font-semibold mb-3">Quantity</h3>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <Button
                   variant="outline"
                   size="icon"
@@ -406,7 +406,7 @@ export default function ProductDetails() {
                 <h3 className="font-semibold mb-3 flex items-center gap-2">
                   <Truck className="w-5 h-5" /> Delivery Options
                 </h3>
-                <div className="flex gap-2 mb-3">
+                <div className="mb-3 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
                   <Input
                     placeholder="Enter Pincode"
                     value={pincode}
@@ -451,21 +451,21 @@ export default function ProductDetails() {
             )}
 
             {/* Action Buttons */}
-            <div className="flex gap-2 sm:gap-3 sticky bottom-0 z-20 bg-white/95 backdrop-blur p-3 sm:p-4 -mx-3 sm:-mx-4 border-t">
+            <div className="sticky bottom-0 z-20 -mx-3 flex min-w-0 gap-2 border-t bg-white/95 p-3 backdrop-blur sm:-mx-4 sm:gap-3 sm:p-4">
               <Button
                 onClick={addToCart}
                 variant="outline"
-                className="flex-1 h-12 sm:h-14 text-sm sm:text-lg px-2 sm:px-4"
+                className="h-12 min-w-0 flex-1 px-2 text-xs sm:h-14 sm:px-4 sm:text-lg"
                 disabled={product.is_coming_soon || !inStock || !selectedSize}
               >
-                <ShoppingCart className="w-5 h-5 mr-2" /> {product.is_coming_soon ? 'Coming Soon' : 'Add to Cart'}
+                <ShoppingCart className="mr-1 h-4 w-4 flex-shrink-0 sm:mr-2 sm:h-5 sm:w-5" /> <span className="truncate">{product.is_coming_soon ? 'Coming Soon' : 'Add to Cart'}</span>
               </Button>
               <Button
                 onClick={buyNow}
-                className="flex-1 h-12 sm:h-14 text-sm sm:text-lg px-2 sm:px-4 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                className="h-12 min-w-0 flex-1 bg-gradient-to-r from-orange-500 to-orange-600 px-2 text-xs hover:from-orange-600 hover:to-orange-700 sm:h-14 sm:px-4 sm:text-lg"
                 disabled={product.is_coming_soon || !inStock || !selectedSize}
               >
-                <Zap className="w-5 h-5 mr-2" /> Buy Now
+                <Zap className="mr-1 h-4 w-4 flex-shrink-0 sm:mr-2 sm:h-5 sm:w-5" /> <span className="truncate">Buy Now</span>
               </Button>
             </div>
           </div>

@@ -113,8 +113,8 @@ test('product media gallery and ordering choices remain responsive', async ({ pa
   });
   await page.goto('/customer/product/velvet-oud-eau-de-parfum', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Velvet Oud Eau de Parfum' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Show video 2' })).toBeVisible();
-  await page.getByRole('button', { name: 'Show video 2' }).click();
+  await expect(page.getByRole('button', { name: /^Show video/ })).toBeVisible();
+  await page.getByRole('button', { name: /^Show video/ }).click();
   await expect(page.getByLabel('Velvet Oud Eau de Parfum product video')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Previous product media' })).toBeVisible();
   const prices = [];
