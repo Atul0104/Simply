@@ -23,6 +23,7 @@ export default function FooterManagement() {
     contact_email: '',
     contact_phone: '',
     address: ''
+    ,quick_links: []
   });
 
   useEffect(() => {
@@ -64,6 +65,11 @@ export default function FooterManagement() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
+        <Card>
+          <CardHeader><CardTitle>Quick Links</CardTitle></CardHeader>
+          <CardContent><p className="mb-2 text-sm text-stone-500">One link per line using Label | /path or Label | https://example.com</p><Textarea rows={7} value={(formData.quick_links || []).map(link => `${link.label} | ${link.url}`).join('\n')} onChange={event => setFormData({...formData,quick_links:event.target.value.split('\n').map(line=>{const [label,...url]=line.split('|');return {label:label?.trim(),url:url.join('|').trim()};}).filter(link=>link.label&&link.url)})}/></CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>About Section</CardTitle>

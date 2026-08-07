@@ -25,6 +25,7 @@ export default function HeroBannerManagement() {
     title: '',
     subtitle: '',
     image_url: '',
+    media_type: 'image',
     button_text: 'Shop Now',
     button_link: '',
     display_order: 0
@@ -79,6 +80,7 @@ export default function HeroBannerManagement() {
       title: banner.title,
       subtitle: banner.subtitle || '',
       image_url: banner.image_url,
+      media_type: banner.media_type || 'image',
       button_text: banner.button_text || 'Shop Now',
       button_link: banner.button_link || '',
       display_order: banner.display_order || 0
@@ -119,6 +121,7 @@ export default function HeroBannerManagement() {
       title: '',
       subtitle: '',
       image_url: '',
+      media_type: 'image',
       button_text: 'Shop Now',
       button_link: '',
       display_order: 0
@@ -139,7 +142,7 @@ export default function HeroBannerManagement() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">Hero Banner Management</h1>
-            <p className="text-gray-500">Manage promotional banners on homepage</p>
+            <p className="text-gray-500">Manage ordered image/video stories used by the homepage hero and Perfurm Edit</p>
           </div>
           <Button onClick={() => { resetForm(); setShowDialog(true); }} className="gap-2">
             <Plus className="w-4 h-4" /> Add Banner
@@ -164,7 +167,11 @@ export default function HeroBannerManagement() {
                   <TableRow key={banner.id}>
                     <TableCell className="font-medium">{index + 1}</TableCell>
                     <TableCell>
-                      <img src={banner.image_url} alt={banner.title} className="w-32 h-16 object-cover rounded" />
+                      {banner.media_type === 'video' ? (
+                        <video src={banner.image_url} className="h-16 w-32 rounded object-cover" muted playsInline preload="metadata" />
+                      ) : (
+                        <img src={banner.image_url} alt={banner.title} className="w-32 h-16 object-cover rounded" />
+                      )}
                     </TableCell>
                     <TableCell>
                       <div>
@@ -238,14 +245,21 @@ export default function HeroBannerManagement() {
               />
             </div>
             <div>
-              <Label>Image URL *</Label>
+              <Label>Media type</Label>
+              <select value={formData.media_type} onChange={(e) => setFormData({ ...formData, media_type: e.target.value })} className="mt-1 h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+              </select>
+            </div>
+            <div>
+              <Label>Media URL *</Label>
               <Input
                 value={formData.image_url}
                 onChange={(e) => setFormData({ ...formData, image_url: e.target.value })}
-                placeholder="https://example.com/banner.jpg"
+                placeholder={formData.media_type === 'video' ? 'https://example.com/story.mp4' : 'https://example.com/banner.jpg'}
               />
               {formData.image_url && (
-                <img src={formData.image_url} alt="Preview" className="mt-2 w-full h-32 object-cover rounded" />
+                formData.media_type === 'video' ? <video src={formData.image_url} className="mt-2 h-32 w-full rounded object-cover" controls muted playsInline /> : <img src={formData.image_url} alt="Preview" className="mt-2 w-full h-32 object-cover rounded" />
               )}
             </div>
             <div className="grid grid-cols-2 gap-4">

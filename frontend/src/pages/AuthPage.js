@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
 export default function AuthPage() {
   const [activeTab, setActiveTab] = useState('login');
   const [loginMethod, setLoginMethod] = useState('password'); // password, otp
-  const [loginData, setLoginData] = useState({ email: '', password: '', phone: '', otp: '' });
+  const [loginData, setLoginData] = useState({ email: '', password: '', phone: '', otpIdentifier: '', otp: '' });
   const [registerData, setRegisterData] = useState({ email: '', password: '', confirmPassword: '', name: '', phone: '', role: 'customer' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -41,6 +41,9 @@ export default function AuthPage() {
   
   const { login, register, establishSession } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedNext = searchParams.get('next');
+  const nextPath = requestedNext?.startsWith('/') && !requestedNext.startsWith('//') ? requestedNext : '/';
 
   // OTP Timer countdown
   useEffect(() => {
@@ -81,20 +84,22 @@ export default function AuthPage() {
 
   // Send OTP for login
   const sendLoginOtp = async () => {
-    if (!validatePhone(loginData.phone)) {
-      toast.error('Please enter a valid 10-digit phone number');
+    const identifier = loginData.otpIdentifier.trim();
+    const byEmail = identifier.includes('@');
+    if (!(byEmail ? validateEmail(identifier) : validatePhone(identifier))) {
+      toast.error('Enter a valid email or 10-digit phone number');
       return;
     }
     
     setLoading(true);
     try {
       await axios.post(`${API_URL}/auth/send-otp`, {
-        phone: loginData.phone,
-        method: otpMethod
+        identifier,
+        method: byEmail ? 'email' : otpMethod
       });
       setOtpSent(true);
       setOtpTimer(60);
-      toast.success(`OTP sent via ${otpMethod === 'whatsapp' ? 'WhatsApp' : 'SMS'}!`);
+      toast.success(`OTP sent via ${byEmail ? 'email' : otpMethod === 'whatsapp' ? 'WhatsApp' : 'SMS'}!`);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to send OTP');
     }
@@ -112,7 +117,7 @@ export default function AuthPage() {
     setLoading(true);
     try {
       const response = await axios.post(`${API_URL}/auth/verify-otp-login`, {
-        phone: loginData.phone,
+        identifier: loginData.otpIdentifier.trim(),
         otp: loginData.otp
       });
       
@@ -120,7 +125,7 @@ export default function AuthPage() {
       establishSession(access_token, user);
       
       toast.success('Login successful!');
-      navigate('/');
+      navigate(nextPath, { replace: true });
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Invalid OTP');
     }
@@ -148,7 +153,7 @@ export default function AuthPage() {
     
     if (result.success) {
       toast.success('Login successful!');
-      navigate('/');
+      navigate(nextPath, { replace: true });
     } else {
       setError(result.error);
     }
@@ -199,7 +204,7 @@ export default function AuthPage() {
     
     if (result.success) {
       toast.success('Registration successful!');
-      navigate('/');
+      navigate(nextPath, { replace: true });
     } else {
       setError(result.error);
     }
@@ -427,26 +432,22 @@ export default function AuthPage() {
                   <form onSubmit={handleOtpLogin} className="space-y-4">
                     <div>
                       <Label className="flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-green-600" /> Phone Number
+                        <Mail className="w-4 h-4 text-green-600" /> Email or Phone Number
                       </Label>
                       <div className="flex gap-2">
-                        <span className="flex items-center px-3 bg-gray-100 border rounded-l-md text-gray-600">+91</span>
                         <Input
-                          type="tel"
-                          placeholder="Enter 10-digit number"
-                          value={loginData.phone}
-                          onChange={(e) => handlePhoneInput(e.target.value, 'phone', setLoginData, loginData)}
-                          className="rounded-l-none"
-                          maxLength={10}
-                          inputMode="numeric"
-                          autoComplete="tel-national"
-                          pattern="[6-9][0-9]{9}"
+                          type="text"
+                          placeholder="Email or 10-digit phone number"
+                          value={loginData.otpIdentifier}
+                          onChange={(e) => { setLoginData({ ...loginData, otpIdentifier: e.target.value, otp: '' }); setOtpSent(false); }}
+                          maxLength={254}
+                          autoComplete="username"
                         />
                       </div>
                     </div>
                     
                     {/* OTP Method Selection */}
-                    <div className="flex gap-2">
+                    {!loginData.otpIdentifier.includes('@') && <div className="flex gap-2">
                       <Button
                         type="button"
                         variant={otpMethod === 'sms' ? 'default' : 'outline'}
@@ -465,17 +466,17 @@ export default function AuthPage() {
                       >
                         <MessageCircle className="w-4 h-4 mr-1" /> WhatsApp
                       </Button>
-                    </div>
+                    </div>}
                     
                     {!otpSent ? (
                       <Button
                         type="button"
                         onClick={sendLoginOtp}
                         className="w-full"
-                        disabled={loading || loginData.phone.length !== 10}
+                        disabled={loading || !loginData.otpIdentifier.trim()}
                       >
                         {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                        Send OTP via {otpMethod === 'whatsapp' ? 'WhatsApp' : 'SMS'}
+                        Send OTP via {loginData.otpIdentifier.includes('@') ? 'Email' : otpMethod === 'whatsapp' ? 'WhatsApp' : 'SMS'}
                       </Button>
                     ) : (
                       <>
@@ -639,10 +640,6 @@ export default function AuthPage() {
                     {validationErrors.confirmPassword && (
                       <p className="text-red-500 text-xs mt-1">{validationErrors.confirmPassword}</p>
                     )}
-                  </div>
-                  
-                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-3 text-sm text-stone-600">
-                    New accounts are created as <strong>Customer</strong>. Admin access is assigned securely by the Superadmin.
                   </div>
                   
                   <Button type="submit" className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700" disabled={loading}>

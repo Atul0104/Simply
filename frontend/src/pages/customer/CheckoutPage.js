@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, CheckCircle, MapPin, Plus, Home, Briefcase, Truck, CreditCard, Wallet, Tag, Check, X, AlertCircle, Smartphone, Building } from 'lucide-react';
+import { ArrowLeft, CheckCircle, MapPin, Plus, Home, Briefcase, Truck, CreditCard, Wallet, Tag, Check, X, AlertCircle, Smartphone, Building, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import AddressFormFields from '@/components/address/AddressFormFields';
@@ -37,6 +37,7 @@ export default function CheckoutPage() {
   const [addressesLoading, setAddressesLoading] = useState(true);
   const [selectedAddressId, setSelectedAddressId] = useState('');
   const [showNewAddressDialog, setShowNewAddressDialog] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
   const [savingAddress, setSavingAddress] = useState(false);
   const [addressForm, setAddressForm] = useState({
     name: '',
@@ -63,6 +64,7 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(null);
+  const [availableCoupons, setAvailableCoupons] = useState([]);
 
   const cart = JSON.parse(localStorage.getItem('cart') || '[]');
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -74,6 +76,7 @@ export default function CheckoutPage() {
     if (user) {
       fetchSavedAddresses();
       checkRazorpayAvailability();
+      axios.get(`${API_URL}/coupons/mine`).then(response => setAvailableCoupons(response.data || [])).catch(() => setAvailableCoupons([]));
     }
   }, [user]);
 
@@ -153,6 +156,16 @@ export default function CheckoutPage() {
     }
   };
 
+  const openNewAddress = () => {
+    setEditingAddressId(null); setAddressErrors({});
+    setAddressForm({ name: user?.name || '', phone: user?.phone || '', pincode: '', address_line1: '', address_line2: '', city: '', state: '', landmark: '', address_type: 'home', is_default: savedAddresses.length === 0 });
+    setShowNewAddressDialog(true);
+  };
+
+  const openEditAddress = (address) => {
+    setEditingAddressId(address.id); setAddressErrors({}); setAddressForm({ ...address }); setShowNewAddressDialog(true);
+  };
+
   const handleAddNewAddress = async () => {
     const errors = validateAddress(addressForm);
     setAddressErrors(errors);
@@ -171,10 +184,10 @@ export default function CheckoutPage() {
         return;
       }
       
-      const response = await axios.post(`${API_URL}/addresses`, cleanAddress(addressForm), {
+      const response = await axios[editingAddressId ? 'put' : 'post'](`${API_URL}/addresses${editingAddressId ? `/${editingAddressId}` : ''}`, cleanAddress(addressForm), {
         headers: { Authorization: `Bearer ${authToken}` }
       });
-      toast.success('Address added successfully');
+      toast.success(editingAddressId ? 'Address updated successfully' : 'Address added successfully');
       setShowNewAddressDialog(false);
       setAddressForm({
         name: '',
@@ -190,6 +203,7 @@ export default function CheckoutPage() {
       });
       await fetchSavedAddresses();
       setSelectedAddressId(response.data.id);
+      setEditingAddressId(null);
     } catch (error) {
       console.error('Error adding address:', error);
       toast.error(error.response?.data?.detail || 'Failed to add address');
@@ -422,7 +436,7 @@ export default function CheckoutPage() {
         <Card className="max-w-md">
           <CardContent className="p-6 text-center">
             <p className="mb-4">Please login to proceed with checkout</p>
-            <Button onClick={() => navigate('/auth')}>Login</Button>
+            <Button onClick={() => navigate('/auth?next=/customer/checkout')}>Login and continue checkout</Button>
           </CardContent>
         </Card>
       </div>
@@ -521,7 +535,7 @@ export default function CheckoutPage() {
                         <div className="text-center py-8">
                           <MapPin className="w-12 h-12 mx-auto text-gray-400 mb-4" />
                           <p className="text-gray-500 mb-4">No saved addresses</p>
-                          <Button onClick={() => setShowNewAddressDialog(true)}>
+                          <Button onClick={openNewAddress}>
                             <Plus className="w-4 h-4 mr-2" /> Add New Address
                           </Button>
                         </div>
@@ -534,7 +548,7 @@ export default function CheckoutPage() {
                                 <label htmlFor={address.id} className="flex-1 cursor-pointer">
                                   <Card className={`${selectedAddressId === address.id ? 'border-blue-500 border-2' : ''}`}>
                                     <CardContent className="p-4">
-                                      <div className="flex items-center gap-2 mb-2">
+                                      <div className="mb-2 flex items-center gap-2">
                                         {address.address_type === 'home' ? (
                                           <Home className="w-4 h-4 text-blue-500" />
                                         ) : (
@@ -544,6 +558,7 @@ export default function CheckoutPage() {
                                         {address.is_default && (
                                           <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded">Default</span>
                                         )}
+                                        <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={(event) => { event.preventDefault(); openEditAddress(address); }}><Pencil className="mr-1 h-3.5 w-3.5"/>Edit</Button>
                                       </div>
                                       <p className="font-medium">{address.name}</p>
                                       <p className="text-gray-600 text-sm">
@@ -561,7 +576,7 @@ export default function CheckoutPage() {
                             ))}
                           </RadioGroup>
                           
-                          <Button variant="outline" onClick={() => setShowNewAddressDialog(true)} className="w-full">
+                          <Button variant="outline" onClick={openNewAddress} className="w-full">
                             <Plus className="w-4 h-4 mr-2" /> Add New Address
                           </Button>
                         </>
@@ -717,6 +732,8 @@ export default function CheckoutPage() {
                       </Button>
                     </div>
                   ) : (
+                    <div className="space-y-3">
+                    {availableCoupons.length > 0 && <div><p className="mb-2 text-xs font-medium text-stone-500">Available coupons</p><div className="flex gap-2 overflow-x-auto pb-1">{availableCoupons.slice(0, 5).map(coupon => <button type="button" key={coupon.id} onClick={() => setCouponCode(coupon.code)} className="flex-shrink-0 rounded-full border border-dashed border-[#7d4956]/40 bg-[#fff8f4] px-3 py-1.5 font-mono text-xs font-semibold text-[#6f3b49]">{coupon.code}</button>)}</div></div>}
                     <div className="flex flex-col gap-2 min-[380px]:flex-row">
                       <Input
                         placeholder="Enter coupon code"
@@ -725,6 +742,7 @@ export default function CheckoutPage() {
                         className="flex-1"
                       />
                       <Button variant="outline" onClick={handleApplyCoupon} className="shrink-0">Apply</Button>
+                    </div>
                     </div>
                   )}
                 </div>
@@ -787,7 +805,7 @@ export default function CheckoutPage() {
       <Dialog open={showNewAddressDialog} onOpenChange={setShowNewAddressDialog}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add New Address</DialogTitle>
+            <DialogTitle>{editingAddressId ? 'Edit Delivery Address' : 'Add New Address'}</DialogTitle>
           </DialogHeader>
           <AddressFormFields
             form={addressForm}
@@ -897,7 +915,7 @@ export default function CheckoutPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNewAddressDialog(false)} disabled={savingAddress}>Cancel</Button>
             <Button onClick={handleAddNewAddress} disabled={savingAddress}>
-              {savingAddress ? 'Adding...' : 'Add Address'}
+              {savingAddress ? 'Saving…' : editingAddressId ? 'Update Address' : 'Add Address'}
             </Button>
           </DialogFooter>
         </DialogContent>

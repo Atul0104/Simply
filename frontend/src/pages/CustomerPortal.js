@@ -90,6 +90,13 @@ const scentFamilies = [
   { name: 'Amber', note: 'Vanilla, spice & resin', image: 'https://images.unsplash.com/photo-1501183638710-841dd1904471?w=700', category: 'For Her' },
 ];
 
+const previewReviews = ['Aarohi', 'Kabir', 'Meera', 'Vihaan', 'Ananya', 'Reyansh', 'Ishita', 'Arjun', 'Saanvi', 'Dev'].map((name, index) => ({
+  id: `preview-review-${index + 1}`,
+  customer_name: name,
+  rating: index === 5 || index === 7 ? 4 : 5,
+  comment: ['The discovery journey felt personal and unhurried. The scent developed beautifully through the day.', 'Excellent projection without becoming overpowering. The bottle and packaging feel genuinely premium.', 'I started with the smaller bottle and came back for the full size. Choosing a variant was easy.'][index % 3],
+}));
+
 const servicePromises = [
   { icon: ShieldCheck, title: '100% authentic', copy: 'Sourced only from verified fragrance houses' },
   { icon: Truck, title: 'Complimentary delivery', copy: 'Free shipping on orders above Rs. 1,499' },
@@ -164,6 +171,15 @@ function SearchBar({ onClose }) {
     }
   };
 
+  const showSearchRecommendations = async () => {
+    if (query.length >= 2) return setShowResults(true);
+    try {
+      const response = await axios.get(`${API_URL}/catalog/bestsellers`, { params: { limit: 5 } });
+      setSuggestions({ suggestions: [], products: response.data || [] });
+      setShowResults(true);
+    } catch (_) { setShowResults(false); }
+  };
+
   const handleSearch = (e) => {
     e.preventDefault();
     if (query.trim()) {
@@ -189,7 +205,7 @@ function SearchBar({ onClose }) {
           className="pl-10 pr-10"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => query.length >= 2 && setShowResults(true)}
+          onFocus={showSearchRecommendations}
           data-testid="search-input"
         />
         {query && (
@@ -232,7 +248,7 @@ function SearchBar({ onClose }) {
             {/* Product Suggestions */}
             {suggestions.products.length > 0 && (
               <div className="p-2">
-                <p className="text-xs text-gray-500 px-2 mb-1">Products</p>
+                <p className="text-xs text-gray-500 px-2 mb-1">{query.length >= 2 ? 'Products' : 'Bestseller recommendations'}</p>
                 {suggestions.products.map((product) => (
                   <button
                     key={product.id}
@@ -292,7 +308,7 @@ function HomePage() {
   const [activeCoupons, setActiveCoupons] = useState([]);
   const [copiedOfferCode, setCopiedOfferCode] = useState('');
   const [offerPopupOpen, setOfferPopupOpen] = useState(false);
-  const [topReviews, setTopReviews] = useState([]);
+  const [topReviews, setTopReviews] = useState(previewReviews);
   const [creatorCampaigns, setCreatorCampaigns] = useState([]);
   const [footerContent, setFooterContent] = useState(null);
   const heroTouchStartX = useRef(null);
@@ -308,12 +324,12 @@ function HomePage() {
   }
 
   const defaultOffers = [
-    { title: 'Find the scent that stays', subtitle: 'An edited collection of modern, memorable fragrance', cta: 'Explore fragrances', image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=1400', link: '/customer/category/all' },
-    { title: 'The art of the discovery set', subtitle: 'Try them slowly. Choose the one that feels like you.', cta: 'Discover sets', image: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?w=1400', link: '/customer/category/Discovery%20Sets' },
-    { title: 'A beautiful way to be remembered', subtitle: 'Considered fragrance gifts for every occasion', cta: 'Shop gifting', image: 'https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?w=1400', link: '/customer/category/Gifting' },
+    { title: 'Find the scent that stays', subtitle: 'An edited collection of modern, memorable fragrance', cta: 'Explore fragrances', image: 'https://images.unsplash.com/photo-1541643600914-78b084683601?w=1400', media_type: 'image', link: '/customer/category/all' },
+    { title: 'The art of the discovery set', subtitle: 'Try them slowly. Choose the one that feels like you.', cta: 'Discover sets', image: 'https://images.unsplash.com/photo-1594035910387-fea47794261f?w=1400', media_type: 'image', link: '/customer/category/Discovery%20Sets' },
+    { title: 'A beautiful way to be remembered', subtitle: 'Considered fragrance gifts for every occasion', cta: 'Shop gifting', image: 'https://images.unsplash.com/photo-1588405748880-12d1d2a59f75?w=1400', media_type: 'image', link: '/customer/category/Gifting' },
   ];
   const offers = heroBanners.length > 0
-    ? heroBanners.map((banner) => ({ title: banner.title, subtitle: banner.subtitle, cta: banner.button_text, image: banner.image_url, link: banner.button_link || '/customer/category/all' }))
+    ? heroBanners.map((banner) => ({ title: banner.title, subtitle: banner.subtitle, cta: banner.button_text, image: banner.image_url, media_type: banner.media_type || 'image', link: banner.button_link || '/customer/category/all' }))
     : defaultOffers;
   const popupCoupon = activeCoupons[0];
 
@@ -956,7 +972,7 @@ function HomePage() {
               transition={{ duration: reduceMotion ? 0 : 0.5 }}
               className="relative h-[330px] sm:h-[410px] lg:h-[475px]"
             >
-              <img src={offers[offerIndex].image} alt="" className="w-full h-full object-cover" />
+              {offers[offerIndex].media_type === 'video' ? <video src={offers[offerIndex].image} className="h-full w-full object-cover" autoPlay muted loop playsInline preload="metadata" aria-label={offers[offerIndex].title} /> : <img src={offers[offerIndex].image} alt="" className="w-full h-full object-cover" />}
               <div className="absolute inset-0 bg-gradient-to-r from-stone-950/80 via-stone-950/45 to-transparent flex items-center">
                 <div className="px-7 sm:px-14 lg:px-20 py-6 text-white max-w-2xl">
                   <p className="text-xs uppercase tracking-[0.28em] mb-3 text-stone-200">Perfurm · Olfactory stories</p>
@@ -1019,7 +1035,7 @@ function HomePage() {
       </section>
 
       {/* Main Content */}
-      <div className="max-w-[1600px] mx-auto px-3 sm:px-5 lg:px-8 py-8 sm:py-12">
+      <div className="mx-auto flex max-w-[1600px] flex-col px-3 py-8 sm:px-5 sm:py-12 lg:px-8">
         {user && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
@@ -1030,12 +1046,12 @@ function HomePage() {
           </motion.div>
         )}
 
-        {products.length > 0 && <motion.section aria-label="House signature collection" initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-12 overflow-hidden bg-[#171514] text-white sm:mb-16">
+        {products.length > 0 && <motion.section aria-label="House signature collection" initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="order-[10] mb-12 overflow-hidden bg-[#171514] text-white sm:mb-16">
           <div className="grid lg:grid-cols-[.72fr_1.28fr]">
             <div className="flex flex-col justify-center border-b border-white/10 p-7 sm:p-10 lg:border-b-0 lg:border-r lg:p-14">
               <Crown className="h-7 w-7 text-[#d4ae72]" />
               <p className="mt-7 text-[10px] font-semibold uppercase tracking-[.32em] text-[#d4ae72]">The house signatures</p>
-              <h2 className="display-serif mt-3 text-4xl leading-[1.02] sm:text-5xl">Four moods.<br/>One commanding presence.</h2>
+              <h2 className="display-serif mt-3 text-4xl leading-[1.02] sm:text-5xl">The signatures<br/>of our house.</h2>
               <p className="mt-5 max-w-md text-sm leading-7 text-stone-300">Meet the fragrances that define the Perfurm house—from luminous freshness to a deep after-dark trail. Choose the character that feels unmistakably yours.</p>
               <Button onClick={() => navigate('/customer/category/all')} variant="outline" className="mt-7 w-fit rounded-full border-white/30 bg-transparent px-6 text-white hover:bg-white hover:text-stone-950">Discover the collection <ArrowUpRight className="ml-2 h-4 w-4"/></Button>
             </div>
@@ -1052,7 +1068,7 @@ function HomePage() {
         
         {/* Most Viewed Products */}
         {visibility.show_most_viewed && mostViewed.length > 0 && (
-          <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55 }} className="mb-10 sm:mb-14">
+          <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55 }} className="order-[20] mb-10 bg-[#171514] p-5 text-white sm:mb-14 sm:p-8">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <Eye className="w-6 h-6 text-blue-600" />
@@ -1075,7 +1091,7 @@ function HomePage() {
           </motion.section>
         )}
 
-        {creatorCampaigns.length > 0 && <section className="mt-14 sm:mt-20" aria-labelledby="creator-campaigns-title">
+        {creatorCampaigns.length > 0 && <section className="order-[50] mt-14 sm:mt-20" aria-labelledby="creator-campaigns-title">
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
               <p className="text-xs uppercase tracking-[0.2em] text-[#7d4956]">Seen on social</p>
@@ -1088,7 +1104,7 @@ function HomePage() {
           </div>
         </section>}
 
-        <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-12 sm:mb-16">
+        <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="order-[70] mb-12 sm:mb-16">
           <div className="text-center max-w-2xl mx-auto mb-7 sm:mb-9">
             <p className="text-[10px] uppercase tracking-[0.3em] text-[#8b5b66] mb-3">Find your fragrance family</p>
             <h2 className="display-serif text-3xl sm:text-4xl font-semibold">Begin with a feeling</h2>
@@ -1111,7 +1127,7 @@ function HomePage() {
 
         {/* Featured/Trending Products */}
         {visibility.show_trending && trending.length > 0 && (
-          <section className="mb-10 sm:mb-14">
+          <section className="order-[30] mb-10 bg-[#171514] p-5 text-white sm:mb-14 sm:p-8">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-6 h-6 text-orange-500" />
@@ -1129,22 +1145,19 @@ function HomePage() {
           </section>
         )}
 
-        <motion.section initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="grid lg:grid-cols-2 mb-12 sm:mb-16 bg-[#2b2422] text-white overflow-hidden">
-          <div className="min-h-[330px] sm:min-h-[430px] overflow-hidden">
-            <img src="https://images.unsplash.com/photo-1594035910387-fea47794261f?w=1200" alt="Perfumer composing a fragrance" className="w-full h-full object-cover hover:scale-[1.02] transition-transform duration-1000" />
-          </div>
-          <div className="flex flex-col justify-center p-8 sm:p-12 lg:p-16">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-[#d3aaa3] mb-5">The Perfurm edit</p>
-            <h2 className="display-serif text-4xl sm:text-5xl leading-tight">A wardrobe of scent, composed around you.</h2>
-            <p className="text-stone-300 leading-relaxed mt-5 max-w-lg">Fragrance changes with skin, weather and memory. Our discovery sets let you live with each composition before choosing a full bottle.</p>
-            <Button onClick={() => navigate('/customer/category/Discovery%20Sets')} variant="outline" className="mt-7 rounded-full border-white/40 bg-transparent text-white hover:bg-white hover:text-stone-900 w-fit px-6">
-              Explore discovery sets <ArrowUpRight className="ml-2 w-4 h-4" />
-            </Button>
+        <motion.section initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="order-[60] mb-12 overflow-hidden bg-[#2b2422] p-5 text-white sm:mb-16 sm:p-8">
+          <div className="mb-5 flex items-end justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[0.3em] text-[#d3aaa3]">The Perfurm edit</p><h2 className="display-serif mt-2 text-3xl sm:text-4xl">Stories selected by the house.</h2></div><p className="hidden max-w-sm text-right text-sm text-stone-400 sm:block">Ordered and updated from Hero &amp; Edit Management.</p></div>
+          <div className="flex snap-x gap-4 overflow-x-auto pb-3 no-scrollbar">
+            {offers.slice(0, 6).map((story, index) => <button key={`${story.title}-${index}`} type="button" onClick={() => navigate(story.link)} className="group relative min-h-[260px] min-w-[78%] snap-start overflow-hidden text-left sm:min-w-[340px] lg:min-w-[390px]">
+              {story.media_type === 'video' ? <video src={story.image} className="absolute inset-0 h-full w-full object-cover" autoPlay muted loop playsInline preload="metadata" /> : <img src={story.image} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />}
+              <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-transparent" />
+              <span className="absolute inset-x-0 bottom-0 p-5"><span className="block text-[10px] uppercase tracking-[.2em] text-[#e7c991]">Edit {String(index + 1).padStart(2, '0')}</span><span className="display-serif mt-1 block text-2xl">{story.title}</span><span className="mt-2 line-clamp-2 block text-sm text-white/70">{story.subtitle}</span></span>
+            </button>)}
           </div>
         </motion.section>
 
         {visibility.show_bestsellers && bestsellers.length > 0 && (
-          <section className="mb-10 sm:mb-14">
+          <section className="order-[40] mb-10 bg-[#171514] p-5 text-white sm:mb-14 sm:p-8">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <Star className="w-5 h-5 text-[#6f3b49]" />
@@ -1163,7 +1176,7 @@ function HomePage() {
         )}
 
         {visibility.show_offer_cards && (offerCards.length > 0 || activeCoupons.length > 0) && (
-          <section id="offers-section" className="mb-10 scroll-mt-28 sm:mb-14" aria-labelledby="offers-title">
+          <section id="offers-section" className="order-[80] mb-10 scroll-mt-28 sm:mb-14" aria-labelledby="offers-title">
             <div className="mb-5 flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-[#7d4956]">Limited-time privileges</p>
@@ -1210,7 +1223,7 @@ function HomePage() {
         )}
 
         {visibility.show_bank_offers && bankOffers.length > 0 && (
-          <section className="mb-10 sm:mb-14 border-y border-stone-200 py-5">
+          <section className="order-[90] mb-10 sm:mb-14 border-y border-stone-200 py-5">
             <div className="flex gap-4 overflow-x-auto no-scrollbar">
               {bankOffers.map((offer) => (
                 <div key={offer.id} className="min-w-[260px] rounded-sm border border-stone-200 bg-[#fffdf9] px-5 py-4">
@@ -1224,7 +1237,7 @@ function HomePage() {
         )}
         
         {/* All Products */}
-        {visibility.show_new_arrivals && <section>
+        {visibility.show_new_arrivals && <section className="order-[100]">
           <div className="flex justify-between items-center mb-4">
             <h2 className="display-serif text-2xl sm:text-3xl font-semibold">
               {selectedCategory || 'All Products'}
@@ -1251,14 +1264,14 @@ function HomePage() {
           )}
         </section>}
 
-        <section className="mt-14 sm:mt-20 mb-4 text-center">
+        <section className="order-[110] mt-14 sm:mt-20 mb-4 text-center">
           <Quote className="w-8 h-8 mx-auto text-[#a1727c] mb-5" />
           <blockquote className="display-serif text-2xl sm:text-4xl max-w-4xl mx-auto leading-snug">“The discovery set made choosing a signature scent feel personal, unhurried and genuinely special.”</blockquote>
           <div className="flex justify-center gap-1 mt-5 text-[#7d4956]">{[1,2,3,4,5].map((star) => <Star key={star} className="w-4 h-4 fill-current" />)}</div>
           <p className="text-xs uppercase tracking-[0.2em] text-stone-500 mt-3">Aarohi · Mumbai</p>
         </section>
         {topReviews.length > 0 && (
-          <section className="mt-14 sm:mt-20" aria-labelledby="top-reviews-title">
+          <section className="order-[120] mt-14 sm:mt-20" aria-labelledby="top-reviews-title">
             <div className="mb-5 flex items-end justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-[#7d4956]">Verified fragrance stories</p>
@@ -1315,16 +1328,16 @@ function HomePage() {
               </p>
               {/* Social Media Icons */}
               <div className="flex gap-4 mt-4">
-                <a href="https://facebook.com" aria-label="Perfurm on Facebook" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">
+                <a href={footerContent?.facebook_url || 'https://facebook.com'} aria-label="Perfurm on Facebook" target="_blank" rel="noopener noreferrer" className="hover:text-blue-400 transition-colors">
                   <Facebook className="w-5 h-5" />
                 </a>
-                <a href="https://instagram.com" aria-label="Perfurm on Instagram" target="_blank" rel="noopener noreferrer" className="hover:text-pink-400 transition-colors">
+                <a href={footerContent?.instagram_url || 'https://instagram.com'} aria-label="Perfurm on Instagram" target="_blank" rel="noopener noreferrer" className="hover:text-pink-400 transition-colors">
                   <Instagram className="w-5 h-5" />
                 </a>
-                <a href="https://twitter.com" aria-label="Perfurm on X" target="_blank" rel="noopener noreferrer" className="hover:text-blue-300 transition-colors">
+                <a href={footerContent?.twitter_url || 'https://twitter.com'} aria-label="Perfurm on X" target="_blank" rel="noopener noreferrer" className="hover:text-blue-300 transition-colors">
                   <Twitter className="w-5 h-5" />
                 </a>
-                <a href="https://youtube.com" aria-label="Perfurm on YouTube" target="_blank" rel="noopener noreferrer" className="hover:text-red-500 transition-colors">
+                <a href={footerContent?.youtube_url || 'https://youtube.com'} aria-label="Perfurm on YouTube" target="_blank" rel="noopener noreferrer" className="hover:text-red-500 transition-colors">
                   <Youtube className="w-5 h-5" />
                 </a>
               </div>
@@ -1332,12 +1345,8 @@ function HomePage() {
             <div>
               <h4 className="font-semibold mb-4">Quick Links</h4>
               <ul className="space-y-2 text-sm text-gray-400">
-                <li><Link to="/customer/support" className="hover:text-white transition-colors">About Us</Link></li>
-                <li><Link to="/customer/support" className="hover:text-white transition-colors">Terms & Conditions</Link></li>
-              <li><Link to="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-              <li><Link to="/cookie-policy" className="hover:text-white transition-colors">Cookie Policy</Link></li>
+                {(footerContent?.quick_links || [{label:'About Us',url:'/customer/support'},{label:'Terms & Conditions',url:'/customer/support'},{label:'Privacy Policy',url:'/privacy-policy'},{label:'Cookie Policy',url:'/cookie-policy'},{label:'Return Policy',url:'/customer/support'}]).map(link => <li key={`${link.label}-${link.url}`}><Link to={link.url} className="hover:text-white transition-colors">{link.label}</Link></li>)}
               <li><button type="button" onClick={consent.openPreferences} className="hover:text-white transition-colors">Cookie preferences</button></li>
-                <li><Link to="/customer/support" className="hover:text-white transition-colors">Return Policy</Link></li>
               </ul>
             </div>
             <div>
@@ -1349,12 +1358,12 @@ function HomePage() {
                   </a>
                 </li>
                 <li>
-                  <a href="tel:+919999999999" className="hover:text-white transition-colors flex items-center gap-2">
-                    <Phone className="w-4 h-4" /> +91 99999 99999
+                  <a href={`tel:${footerContent?.contact_phone || '+919999999999'}`} className="hover:text-white transition-colors flex items-center gap-2">
+                    <Phone className="w-4 h-4" /> {footerContent?.contact_phone || '+91 99999 99999'}
                   </a>
                 </li>
                 <li className="text-gray-400">
-                  123 Market St, City, India
+                  {footerContent?.address || 'India'}
                 </li>
               </ul>
             </div>

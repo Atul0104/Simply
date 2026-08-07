@@ -1025,6 +1025,11 @@ class FooterContent(BaseModel):
     contact_email: str = "care@perfurm.com"
     contact_phone: str = "+91 1234567890"
     address: Optional[str] = None
+    quick_links: List[Dict[str, str]] = Field(default_factory=lambda: [
+        {"label": "About Us", "url": "/customer/support"}, {"label": "Terms & Conditions", "url": "/customer/support"},
+        {"label": "Privacy Policy", "url": "/privacy-policy"}, {"label": "Cookie Policy", "url": "/cookie-policy"},
+        {"label": "Return Policy", "url": "/customer/support"},
+    ])
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class FooterContentUpdate(BaseModel):
@@ -1036,6 +1041,22 @@ class FooterContentUpdate(BaseModel):
     contact_email: Optional[str] = None
     contact_phone: Optional[str] = None
     address: Optional[str] = None
+    quick_links: Optional[List[Dict[str, str]]] = None
+
+    @model_validator(mode="after")
+    def validate_footer_links(self):
+        if self.quick_links is not None:
+            if len(self.quick_links) > 12:
+                raise ValueError("A maximum of 12 quick links is allowed")
+            normalized = []
+            for item in self.quick_links:
+                label = str(item.get("label", "")).strip()
+                url = str(item.get("url", "")).strip()
+                if not label or not url or not (url.startswith("/") or url.startswith("https://")):
+                    raise ValueError("Each quick link requires a label and a safe internal or HTTPS URL")
+                normalized.append({"label": label[:80], "url": url[:500]})
+            self.quick_links = normalized
+        return self
 
 # ============== OFFER CARDS MODELS ==============
 class OfferCard(BaseModel):
@@ -1194,6 +1215,7 @@ class HeroBanner(BaseModel):
     title: str
     subtitle: Optional[str] = None
     image_url: str
+    media_type: Literal["image", "video"] = "image"
     button_text: str = "Shop Now"
     button_link: Optional[str] = None
     is_active: bool = True
@@ -1204,6 +1226,7 @@ class HeroBannerCreate(BaseModel):
     title: str
     subtitle: Optional[str] = None
     image_url: str
+    media_type: Literal["image", "video"] = "image"
     button_text: str = "Shop Now"
     button_link: Optional[str] = None
     display_order: int = 0
@@ -1212,6 +1235,7 @@ class HeroBannerUpdate(BaseModel):
     title: Optional[str] = None
     subtitle: Optional[str] = None
     image_url: Optional[str] = None
+    media_type: Optional[Literal["image", "video"]] = None
     button_text: Optional[str] = None
     button_link: Optional[str] = None
     is_active: Optional[bool] = None
@@ -1702,11 +1726,13 @@ async def save_auth_challenge(key: str, otp: str) -> None:
     )
 
 class OtpRequest(BaseModel):
-    phone: str
-    method: str = "sms"  # sms or whatsapp
+    identifier: Optional[str] = None
+    phone: Optional[str] = None  # Backward-compatible mobile clients.
+    method: Literal["email", "sms", "whatsapp"] = "sms"
 
 class OtpVerifyLogin(BaseModel):
-    phone: str
+    identifier: Optional[str] = None
+    phone: Optional[str] = None
     otp: str
 
 class ForgotPasswordRequest(BaseModel):
@@ -1723,21 +1749,40 @@ class ResetPasswordRequest(BaseModel):
 
 @api_router.post("/auth/send-otp")
 async def send_otp(payload: OtpRequest, http_request: Request):
-    """Send OTP for phone login"""
-    phone = payload.phone
-    if not phone or len(phone) != 10:
-        raise HTTPException(status_code=400, detail="Invalid phone number")
+    """Send a login OTP to an existing account by email or Indian mobile number."""
+    identifier = (payload.identifier or payload.phone or "").strip().lower()
+    is_email = "@" in identifier
+    if is_email:
+        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", identifier) or len(identifier) > 254:
+            raise HTTPException(status_code=400, detail="Invalid email address")
+        if payload.method != "email":
+            raise HTTPException(status_code=400, detail="Choose email delivery for an email address")
+        lookup = {"email": identifier}
+    else:
+        identifier = re.sub(r"\D", "", identifier)[-10:]
+        if not re.fullmatch(r"[6-9]\d{9}", identifier):
+            raise HTTPException(status_code=400, detail="Invalid phone number")
+        if payload.method == "email":
+            raise HTTPException(status_code=400, detail="Choose SMS or WhatsApp for a phone number")
+        lookup = {"phone": identifier}
     client_ip = http_request.client.host if http_request.client else "unknown"
     await enforce_rate_limit(f"otp-send-ip:{privacy_key(client_ip)}", 20, 3600)
-    await enforce_rate_limit(f"otp-send-phone:{privacy_key(phone)}", 5, 3600)
+    await enforce_rate_limit(f"otp-send-identifier:{privacy_key(identifier)}", 5, 3600)
     
     # Check if user exists with this phone
-    user = await db.users.find_one({"phone": phone})
+    user = await db.users.find_one(lookup)
     if not user:
-        raise HTTPException(status_code=404, detail="No account found with this phone number")
+        raise HTTPException(status_code=404, detail="No account found with these details")
     
     otp = generate_otp()
-    await save_auth_challenge(f"login:{privacy_key(phone)}", otp)
+    await save_auth_challenge(f"login:{privacy_key(identifier)}", otp)
+
+    if payload.method == "email" and notification_channel_configured("email"):
+        await asyncio.to_thread(send_email_job, {"recipient": identifier, "title": "Your Perfurm login code", "message": f"Your one-time login code is {otp}. It expires in 10 minutes."})
+    elif payload.method in {"sms", "whatsapp"} and notification_channel_configured("sms"):
+        await asyncio.to_thread(send_sms_job, {"recipient": identifier, "title": "Perfurm login code", "message": f"Your code is {otp}. It expires in 10 minutes."})
+    elif not ENABLE_DEMO_OTP and APP_ENV in {"staging", "production"}:
+        raise HTTPException(status_code=503, detail=f"{payload.method.title()} OTP delivery is not configured")
     
     response = {"message": f"OTP sent via {payload.method}"}
     if ENABLE_DEMO_OTP:
@@ -1747,9 +1792,11 @@ async def send_otp(payload: OtpRequest, http_request: Request):
 @api_router.post("/auth/verify-otp-login", response_model=Token)
 async def verify_otp_login(payload: OtpVerifyLogin, http_request: Request, response: Response):
     """Verify OTP and login"""
-    phone = payload.phone
-    otp_key = f"login:{privacy_key(phone)}"
-    await enforce_rate_limit(f"otp-verify:{privacy_key(phone)}", 10, 900)
+    identifier = (payload.identifier or payload.phone or "").strip().lower()
+    lookup = {"email": identifier} if "@" in identifier else {"phone": re.sub(r"\D", "", identifier)[-10:]}
+    identifier = next(iter(lookup.values()))
+    otp_key = f"login:{privacy_key(identifier)}"
+    await enforce_rate_limit(f"otp-verify:{privacy_key(identifier)}", 10, 900)
     stored = await db.auth_challenges.find_one({"key": otp_key})
     if not stored:
         raise HTTPException(status_code=400, detail="OTP expired or not sent")
@@ -1769,7 +1816,7 @@ async def verify_otp_login(payload: OtpVerifyLogin, http_request: Request, respo
     # OTP verified - login user
     await db.auth_challenges.delete_one({"key": otp_key})
     
-    user = await db.users.find_one({"phone": phone})
+    user = await db.users.find_one(lookup)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     

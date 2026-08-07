@@ -20,6 +20,7 @@ export default function ProductDetails() {
   const navigate = useNavigate();
   const [product, setProduct] = useState(null);
   const [similar, setSimilar] = useState([]);
+  const [trendingProducts, setTrendingProducts] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [reviewSummary, setReviewSummary] = useState(null);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -43,7 +44,7 @@ export default function ProductDetails() {
           ? (firstVariant.label || (firstVariant.size_ml ? `${firstVariant.size_ml} ml` : firstVariant.id))
           : (loadedProduct.sizes?.[0] || ''));
         addToRecentlyViewed(loadedProduct.id);
-        await Promise.all([fetchReviews(loadedProduct.id), fetchSimilar(loadedProduct.id)]);
+        await Promise.all([fetchReviews(loadedProduct.id), fetchSimilar(loadedProduct.id), fetchTrendingProducts()]);
       } catch (error) {
         console.error('Error fetching product:', error);
       } finally {
@@ -123,6 +124,11 @@ export default function ProductDetails() {
       setDeliveryInfo(null);
       toast.error(error.response?.data?.detail || 'Unable to check delivery');
     }
+  };
+
+  const fetchTrendingProducts = async () => {
+    try { const response = await axios.get(`${API_URL}/products/trending`, { params: { limit: 6 } }); setTrendingProducts(response.data || []); }
+    catch (_) { setTrendingProducts([]); }
   };
 
   const addToCart = () => {
@@ -460,13 +466,15 @@ export default function ProductDetails() {
               >
                 <ShoppingCart className="mr-1 h-4 w-4 flex-shrink-0 sm:mr-2 sm:h-5 sm:w-5" /> <span className="truncate">{product.is_coming_soon ? 'Coming Soon' : 'Add to Cart'}</span>
               </Button>
+              <motion.div className="min-w-0 flex-1" whileHover={{ scale: 1.015 }} whileTap={{ scale: 0.97 }} animate={inStock && !product.is_coming_soon ? { boxShadow: ['0 0 0 rgba(249,115,22,0)', '0 0 22px rgba(249,115,22,.28)', '0 0 0 rgba(249,115,22,0)'] } : undefined} transition={{ boxShadow: { duration: 2.2, repeat: Infinity } }}>
               <Button
                 onClick={buyNow}
-                className="h-12 min-w-0 flex-1 bg-gradient-to-r from-orange-500 to-orange-600 px-2 text-xs hover:from-orange-600 hover:to-orange-700 sm:h-14 sm:px-4 sm:text-lg"
+                className="h-12 w-full min-w-0 bg-gradient-to-r from-orange-500 to-orange-600 px-2 text-xs hover:from-orange-600 hover:to-orange-700 sm:h-14 sm:px-4 sm:text-lg"
                 disabled={product.is_coming_soon || !inStock || !selectedSize}
               >
                 <Zap className="mr-1 h-4 w-4 flex-shrink-0 sm:mr-2 sm:h-5 sm:w-5" /> <span className="truncate">Buy Now</span>
               </Button>
+              </motion.div>
             </div>
           </div>
         </div>
@@ -502,10 +510,10 @@ export default function ProductDetails() {
                 <TabsTrigger value="details" className="flex-shrink-0">Product Details</TabsTrigger>
                 <TabsTrigger value="specifications">Specifications</TabsTrigger>
                 <TabsTrigger value="reviews">Reviews ({totalReviews})</TabsTrigger>
-                <TabsTrigger value="qa">Q&A</TabsTrigger>
               </TabsList>
 
               <TabsContent value="details" className="space-y-4">
+                {product.usage_instructions && <div className="rounded-2xl border border-[#7d4956]/15 bg-[#fbf7f3] p-5"><h3 className="font-semibold">How to use</h3><p className="mt-2 whitespace-pre-line text-sm leading-6 text-stone-700">{product.usage_instructions}</p></div>}
                 <div>
                   <h3 className="font-semibold mb-2">Why it belongs in your ritual</h3>
                   <ul className="space-y-2 text-gray-700">
@@ -604,21 +612,11 @@ export default function ProductDetails() {
                 )}
               </TabsContent>
 
-              <TabsContent value="qa">
-                <div className="space-y-4">
-                  <div className="flex gap-3">
-                    <MessageCircle className="w-5 h-5 text-gray-400 flex-shrink-0 mt-1" />
-                    <div className="flex-1">
-                      <p className="font-semibold mb-1">Have a question about this product?</p>
-                      <Button variant="outline" size="sm">Ask a Question</Button>
-                    </div>
-                  </div>
-                  <p className="text-gray-500 text-center py-8">No questions yet</p>
-                </div>
-              </TabsContent>
             </Tabs>
           </CardContent>
         </Card>
+
+        <Card className="mt-6 border-stone-200 bg-white/80" aria-labelledby="product-questions-title"><CardContent className="p-5 sm:p-6"><div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex gap-3"><MessageCircle className="mt-1 h-5 w-5 flex-shrink-0 text-[#7d4956]"/><div><h2 id="product-questions-title" className="font-semibold">Questions about this fragrance?</h2><p className="mt-1 text-sm text-stone-500">Ask about notes, performance, ingredients or bottle sizes.</p></div></div><Button variant="outline" size="sm">Ask a Question</Button></div></CardContent></Card>
 
         {/* Similar Products */}
         {similar.length > 0 && (
@@ -658,6 +656,7 @@ export default function ProductDetails() {
             </div>
           </div>
         )}
+        {trendingProducts.length > 0 && <section className="mt-10" aria-labelledby="product-trending-title"><div className="mb-4 flex items-center justify-between"><h2 id="product-trending-title" className="display-serif text-2xl font-semibold">Trending fragrances</h2><Button variant="link" onClick={() => navigate('/customer/category/all')}>View all</Button></div><div className="flex snap-x gap-3 overflow-x-auto pb-3">{trendingProducts.filter(item => item.id !== product.id).slice(0, 6).map(item => <button type="button" key={item.id} onClick={() => navigate(`/customer/product/${item.slug || item.id}`)} className="min-w-[155px] snap-start rounded-xl border bg-white p-3 text-left sm:min-w-[190px]"><img src={item.images?.[0] || '/placeholder-perfume.svg'} alt={item.name} className="aspect-square w-full rounded-lg bg-stone-100 object-cover"/><p className="mt-3 line-clamp-2 text-sm font-semibold">{item.name}</p><p className="mt-1 text-sm text-[#6f3b49]">₹{Number(item.price).toLocaleString('en-IN')}</p></button>)}</div></section>}
       </div>
 
       {/* Image Zoom Modal */}
