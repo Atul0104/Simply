@@ -132,14 +132,14 @@ Source documents: `PRODUCTION_AUDIT.md`, `PRODUCTION_CHECKLIST.md`, `LOAD_TEST_R
 - [ ] Confirm required MongoDB indexes using production-shaped query plans.
 - [ ] Remove remaining N+1 database query patterns.
 - [ ] Add safe caching for public catalogue, CMS, consent configuration and merchandising reads.
-- [ ] Configure and measure multiple Uvicorn workers/containers.
-- [ ] Size database connection pools against worker and replica counts.
-- [ ] Configure ingress concurrency/rate limits and explicit 429/503 load shedding.
-- [ ] Repeat 50/200/500/1,000/1,500/2,000/5,000 request tests in production-like staging.
+- [x] Configure environment-driven multiple Uvicorn workers and separate singleton background workers.
+- [~] Configure database connection pools/timeouts; final sizing against staging worker/replica counts remains pending.
+- [x] Configure application concurrency limits, retryable 503 load shedding and Nginx connection/backlog controls.
+- [~] Repeat 50/200/500/1,000/1,500/2,000/5,000 request tests locally after remediation; production-like staging repetition remains pending.
 - [ ] Add authenticated load scenarios for login/refresh, search, address, cart quote and admin lists.
 - [ ] Add isolated write-load scenarios for inventory reservation, idempotent checkout, payment webhooks and order transitions.
-- [ ] Run spike and breakpoint tests.
-- [ ] Run a 30–60 minute soak test while monitoring resource growth and recovery.
+- [~] Run local spike testing through 500 concurrency; repeat breakpoint testing with production ingress and autoscaling in staging.
+- [~] Run a 60-second local soak smoke test successfully; the required 30–60 minute monitored staging soak remains pending.
 - [ ] Monitor CPU, memory, event-loop lag, MongoDB latency/connections, worker queues and error rate during tests.
 - [ ] Meet approved latency/error SLOs and obtain performance sign-off. Current local API result fails latency qualification.
 

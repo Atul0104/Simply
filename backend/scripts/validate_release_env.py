@@ -26,6 +26,11 @@ def main() -> int:
     if env.get("ENABLE_DEMO_OTP", "").lower() != "false": errors.append("ENABLE_DEMO_OTP must be false")
     if env.get("COOKIE_SECURE", "").lower() != "true": errors.append("COOKIE_SECURE must be true")
     if env.get("COOKIE_SAMESITE", "").lower() not in {"lax", "strict", "none"}: errors.append("COOKIE_SAMESITE must be lax, strict or none")
+    for key in ("WEB_CONCURRENCY", "UVICORN_LIMIT_CONCURRENCY", "UVICORN_BACKLOG", "MAX_INFLIGHT_REQUESTS", "REQUEST_QUEUE_TIMEOUT_MS", "MONGO_MAX_POOL_SIZE", "MONGO_WAIT_QUEUE_TIMEOUT_MS"):
+        try:
+            if int(env.get(key, "0")) < 1: errors.append(f"{key} must be a positive integer")
+        except ValueError: errors.append(f"{key} must be a positive integer")
+    if env.get("RUN_BACKGROUND_WORKERS", "").lower() != "false": errors.append("RUN_BACKGROUND_WORKERS must be false on scaled web services; use the dedicated worker service")
     for key in ("CONSENT_POLICY_VERSION", "COOKIE_POLICY_VERSION", "PRIVACY_POLICY_VERSION"):
         if not env.get(key): errors.append(f"{key} is required")
     try:

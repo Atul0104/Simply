@@ -62,3 +62,48 @@ node backend/scripts/load_test.mjs
 ```
 
 Only run against systems you own or are explicitly authorized to test. The default target is localhost.
+
+## Remediation verification — 2026-08-07
+
+Implemented controls:
+
+- Environment-controlled MongoDB min/max pools, wait-queue and server-selection timeouts.
+- Per-worker coalesced TTL cache of already encoded public JSON responses.
+- Nginx microcache with request locking and stale-on-upstream-error behavior for approved public routes.
+- Two environment-controlled Uvicorn workers with connection/backlog bounds.
+- Background reservation/notification jobs moved to a dedicated singleton process so API scaling cannot duplicate jobs.
+- Application in-flight limit with a 250 ms admission queue and retryable `503` load shedding.
+- Cache-hit/miss and overload-rejection Prometheus counters.
+- Reusable staged spike/soak harness: `backend/scripts/stress_test.mjs`.
+
+### Controlled batch comparison
+
+Local two-worker mock-database preview, 200 client sockets, encoded response cache warm:
+
+| Requests | Success | Throughput | p50 | p95 | Before p95 |
+|---:|---:|---:|---:|---:|---:|
+| 50 | 100% | 236.8 rps | 159 ms | 192 ms | 383 ms |
+| 200 | 100% | 377.3 rps | 416 ms | 498 ms | 1.31 s |
+| 500 | 100% | 340.0 rps | 975 ms | 1.42 s | 2.80 s |
+| 1,000 | 100% | 367.3 rps | 1.41 s | 2.62 s | 5.44 s |
+| 1,500 | 100% | 343.0 rps | 2.36 s | 4.24 s | 9.86 s |
+| 2,000 | 100% | 359.9 rps | 2.88 s | 5.37 s | 12.27 s |
+| 5,000 | 100% | 342.6 rps | 7.45 s | 13.82 s | 30.79 s |
+
+At 5,000 requests, throughput improved about 120%, while p95 improved about 55%. The large one-shot batch still includes intentional client-side queueing; sustained concurrency is the better capacity signal.
+
+### Spike test
+
+| Concurrency | Duration | Requests | Throughput | Success | p95 | Controlled 503 | Transport errors |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 50 | 10 s | 3,675 | 367.5 rps | 100% | 179 ms | 0 | 0 |
+| 200 | 10 s | 3,600 | 360.0 rps | 100% | 699 ms | 0 | 0 |
+| 500 | 10 s | 3,390 | 339.0 rps | 98.23% | 1.98 s | 60 | 0 |
+
+The service meets the proposed read p95 target through 200 sustained concurrent clients. At 500, controlled load shedding protects the process; clients must honor `Retry-After` with jittered exponential backoff.
+
+### Local soak smoke test
+
+At 100 concurrent clients for 60 seconds: 21,930 requests, 365.5 rps, 100% success, p50 263 ms, p95 356 ms, p99 439 ms, zero overload responses and zero transport errors.
+
+This is a local stability smoke test, not the required production qualification. The 30–60 minute soak remains pending until authenticated replica-set staging, Nginx, provider sandboxes, intended CPU/memory limits and monitoring are available.

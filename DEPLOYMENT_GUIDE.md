@@ -8,3 +8,5 @@
 6. Monitor errors, latency, worker queues, payment/shipping webhook failures and consent-config errors. Roll back the artifact—not the database—unless a documented migration rollback is safe.
 
 Changing backend environment values requires a restart. Changing `REACT_APP_*` values requires rebuilding the frontend.
+
+The Compose deployment starts a multi-worker API and one dedicated background-worker service. Scale API containers only after sizing MongoDB connection pools (`replicas × web workers × max pool size`) within the database connection budget. Never enable `RUN_BACKGROUND_WORKERS` on scaled web containers. Confirm Nginx returns `X-Cache-Status` only for approved public GET routes and never caches authentication, customer, checkout or admin responses.

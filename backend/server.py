@@ -1,6 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, File, UploadFile, Query, Request, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -66,10 +67,23 @@ SHIPPING_PROVIDER_API_URL = os.environ.get("SHIPPING_PROVIDER_API_URL")
 SHIPPING_PROVIDER_API_TOKEN = os.environ.get("SHIPPING_PROVIDER_API_TOKEN")
 SHIPPING_PROVIDER_WEBHOOK_SECRET = os.environ.get("SHIPPING_PROVIDER_WEBHOOK_SECRET")
 METRICS_TOKEN = os.environ.get("METRICS_TOKEN")
+MONGO_MAX_POOL_SIZE = int(os.environ.get("MONGO_MAX_POOL_SIZE", "100"))
+MONGO_MIN_POOL_SIZE = int(os.environ.get("MONGO_MIN_POOL_SIZE", "5"))
+MONGO_WAIT_QUEUE_TIMEOUT_MS = int(os.environ.get("MONGO_WAIT_QUEUE_TIMEOUT_MS", "2000"))
+MONGO_SERVER_SELECTION_TIMEOUT_MS = int(os.environ.get("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000"))
+MAX_INFLIGHT_REQUESTS = int(os.environ.get("MAX_INFLIGHT_REQUESTS", "200"))
+REQUEST_QUEUE_TIMEOUT_MS = int(os.environ.get("REQUEST_QUEUE_TIMEOUT_MS", "250"))
+PUBLIC_CACHE_TTL_SECONDS = int(os.environ.get("PUBLIC_CACHE_TTL_SECONDS", "15"))
+RUN_BACKGROUND_WORKERS = os.environ.get("RUN_BACKGROUND_WORKERS", "true").lower() == "true"
+if MONGO_MIN_POOL_SIZE < 0 or MONGO_MAX_POOL_SIZE < max(1, MONGO_MIN_POOL_SIZE):
+    raise RuntimeError("MongoDB pool sizes are invalid")
+if MAX_INFLIGHT_REQUESTS < 1 or REQUEST_QUEUE_TIMEOUT_MS < 1 or PUBLIC_CACHE_TTL_SECONDS < 0:
+    raise RuntimeError("Performance limits must be positive")
 REVERSE_GEOCODING_URL = os.environ.get("REVERSE_GEOCODING_URL", "https://api.bigdatacloud.net/data/reverse-geocode-client?latitude={latitude}&longitude={longitude}&localityLanguage=en")
 request_metrics: Dict[str, Any] = {
     "started_at": time.time(), "requests_total": defaultdict(int),
     "duration_seconds_sum": 0.0, "duration_seconds_count": 0,
+    "overload_rejections": 0, "cache_hits": 0, "cache_misses": 0,
 }
 if APP_ENV in {"staging", "production"} and USE_MOCK_DB:
     raise RuntimeError("USE_MOCK_DB must be false outside development and test")
@@ -78,7 +92,12 @@ if USE_MOCK_DB:
     from mongomock_motor import AsyncMongoMockClient
     client = AsyncMongoMockClient()
 else:
-    client = AsyncIOMotorClient(mongo_url, tlsCAFile=certifi.where())
+    client = AsyncIOMotorClient(
+        mongo_url, tlsCAFile=certifi.where(), maxPoolSize=MONGO_MAX_POOL_SIZE,
+        minPoolSize=MONGO_MIN_POOL_SIZE, waitQueueTimeoutMS=MONGO_WAIT_QUEUE_TIMEOUT_MS,
+        serverSelectionTimeoutMS=MONGO_SERVER_SELECTION_TIMEOUT_MS,
+        connectTimeoutMS=MONGO_SERVER_SELECTION_TIMEOUT_MS,
+    )
 
 db = client[os.environ.get("DB_NAME", "ecommerce_db")]
 # Security
@@ -126,6 +145,32 @@ app = FastAPI(
     redoc_url=None if APP_ENV == "production" else "/redoc",
 )
 api_router = APIRouter(prefix="/api")
+inflight_semaphore = asyncio.Semaphore(MAX_INFLIGHT_REQUESTS)
+public_cache: Dict[str, tuple[float, Any]] = {}
+public_cache_locks: Dict[str, asyncio.Lock] = {}
+
+async def cached_public_response(key: str, producer, ttl: Optional[int] = None) -> Response:
+    """Cache encoded JSON bytes so cache hits avoid database work and repeated serialization."""
+    lifetime = PUBLIC_CACHE_TTL_SECONDS if ttl is None else ttl
+    response_key = f"json:{key}"
+    now = time.monotonic()
+    cached = public_cache.get(response_key)
+    cache_status = "HIT"
+    if not cached or cached[0] <= now:
+        lock = public_cache_locks.setdefault(response_key, asyncio.Lock())
+        async with lock:
+            cached = public_cache.get(response_key)
+            if not cached or cached[0] <= time.monotonic():
+                request_metrics["cache_misses"] += 1
+                encoded = json.dumps(jsonable_encoder(await producer()), separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+                cached = (time.monotonic() + max(0, lifetime), encoded)
+                public_cache[response_key] = cached
+                cache_status = "MISS"
+            else:
+                request_metrics["cache_hits"] += 1
+    else:
+        request_metrics["cache_hits"] += 1
+    return Response(content=cached[1], media_type="application/json", headers={"X-App-Cache": cache_status})
 
 # ============== ENUMS ==============
 class UserRole(str, Enum):
@@ -2081,14 +2126,15 @@ def public_product(product: Dict[str, Any]) -> Dict[str, Any]:
 
 @api_router.get("/products")
 async def get_products(category: Optional[str] = None, seller_id: Optional[str] = None, coming_soon: bool = False):
-    query = {"is_active": True, "is_coming_soon": True if coming_soon else {"$ne": True}}
-    if category:
-        query["category"] = category
-    if seller_id:
-        query["seller_id"] = seller_id
-    
-    products = await db.products.find(query, {"_id": 0}).to_list(1000)
-    return [public_product(product) for product in products]
+    async def produce():
+        query = {"is_active": True, "is_coming_soon": True if coming_soon else {"$ne": True}}
+        if category:
+            query["category"] = category
+        if seller_id:
+            query["seller_id"] = seller_id
+        products = await db.products.find(query, {"_id": 0}).to_list(1000)
+        return [public_product(product) for product in products]
+    return await cached_public_response(f"products:{category}:{seller_id}:{coming_soon}", produce)
 
 @api_router.get("/products/trending")
 async def get_trending_products(limit: int = 10):
@@ -2269,23 +2315,25 @@ async def catalog_products(
 
 @api_router.get("/catalog/bestsellers")
 async def catalog_bestsellers(limit: int = Query(default=10, ge=1, le=50)):
-    pipeline = [
-        {"$unwind": "$items"},
-        {"$group": {"_id": "$items.product_id", "quantity": {"$sum": "$items.quantity"}}},
-        {"$sort": {"quantity": -1}}, {"$limit": limit},
-    ]
-    ranked_ids = [document["_id"] async for document in db.orders.aggregate(pipeline)]
-    products = []
-    for product_id in ranked_ids:
-        product = await db.products.find_one({"id": product_id, "is_active": True}, {"_id": 0})
-        if product:
-            products.append(public_product(product))
-    if len(products) < limit:
-        fallback = await db.products.find(
-            {"is_active": True, "id": {"$nin": [item["id"] for item in products]}}, {"_id": 0}
-        ).sort([("is_bestseller", -1), ("created_at", -1)]).limit(limit - len(products)).to_list(limit - len(products))
-        products.extend(public_product(product) for product in fallback)
-    return products
+    async def produce():
+        pipeline = [
+            {"$unwind": "$items"},
+            {"$group": {"_id": "$items.product_id", "quantity": {"$sum": "$items.quantity"}}},
+            {"$sort": {"quantity": -1}}, {"$limit": limit},
+        ]
+        ranked_ids = [document["_id"] async for document in db.orders.aggregate(pipeline)]
+        products = []
+        for product_id in ranked_ids:
+            product = await db.products.find_one({"id": product_id, "is_active": True}, {"_id": 0})
+            if product:
+                products.append(public_product(product))
+        if len(products) < limit:
+            fallback = await db.products.find(
+                {"is_active": True, "id": {"$nin": [item["id"] for item in products]}}, {"_id": 0}
+            ).sort([("is_bestseller", -1), ("created_at", -1)]).limit(limit - len(products)).to_list(limit - len(products))
+            products.extend(public_product(product) for product in fallback)
+        return products
+    return await cached_public_response(f"catalog-bestsellers:{limit}", produce, ttl=max(PUBLIC_CACHE_TTL_SECONDS, 30))
 
 @api_router.get("/products/{product_id}")
 async def get_product(product_id: str):
@@ -3355,15 +3403,17 @@ async def get_product_reviews(product_id: str):
 
 @api_router.get("/storefront/reviews/top")
 async def get_storefront_top_reviews(limit: int = Query(default=10, ge=1, le=20)):
-    reviews = await db.reviews.find(
-        {"moderation_status": "approved", "comment": {"$type": "string", "$ne": ""}}, {"_id": 0},
-    ).sort([("rating", -1), ("helpful_count", -1), ("created_at", -1)]).to_list(limit)
-    product_ids = list({review["product_id"] for review in reviews})
-    products = await db.products.find(
-        {"id": {"$in": product_ids}, "is_active": True}, {"_id": 0, "id": 1, "name": 1, "slug": 1, "images": 1},
-    ).to_list(len(product_ids) or 1)
-    products_by_id = {product["id"]: product for product in products}
-    return [{**review, "product": products_by_id.get(review["product_id"])} for review in reviews if products_by_id.get(review["product_id"])]
+    async def produce():
+        reviews = await db.reviews.find(
+            {"moderation_status": "approved", "comment": {"$type": "string", "$ne": ""}}, {"_id": 0},
+        ).sort([("rating", -1), ("helpful_count", -1), ("created_at", -1)]).to_list(limit)
+        product_ids = list({review["product_id"] for review in reviews})
+        products = await db.products.find(
+            {"id": {"$in": product_ids}, "is_active": True}, {"_id": 0, "id": 1, "name": 1, "slug": 1, "images": 1},
+        ).to_list(len(product_ids) or 1)
+        products_by_id = {product["id"]: product for product in products}
+        return [{**review, "product": products_by_id.get(review["product_id"])} for review in reviews if products_by_id.get(review["product_id"])]
+    return await cached_public_response(f"top-reviews:{limit}", produce)
 
 # ============== NOTIFICATION ROUTES ==============
 def notification_channel_configured(channel: str) -> bool:
@@ -6568,8 +6618,10 @@ async def optional_request_user(request: Request) -> Optional[Dict[str, Any]]:
 
 @api_router.get("/privacy/consent/config")
 async def get_consent_config():
-    config = await effective_consent_config()
-    return {**config, "necessary": {"enabled": True, "mutable": False}}
+    async def produce():
+        config = await effective_consent_config()
+        return {**config, "necessary": {"enabled": True, "mutable": False}}
+    return await cached_public_response("consent-config", produce, ttl=max(PUBLIC_CACHE_TTL_SECONDS, 30))
 
 @api_router.post("/privacy/consent", status_code=201)
 async def record_consent(payload: ConsentRecordCreate, request: Request):
@@ -6614,6 +6666,8 @@ async def publish_consent_config(payload: ConsentPolicyUpdate, user: Dict[str, A
     revision = int(str(current["consent_policy_version"]).rsplit(".", 1)[-1]) + 1
     update = {**current, **payload.model_dump(), "consent_policy_version": f"{datetime.now(timezone.utc).date()}.{revision}", "updated_at": now, "published_at": now, "published_by": user["id"]}
     await db.consent_policy.replace_one({"id": "consent_policy"}, update, upsert=True)
+    public_cache.pop("consent-config", None)
+    public_cache.pop("json:consent-config", None)
     await db.audit_logs.insert_one({"id": str(uuid.uuid4()), "actor_id": user["id"], "action": "privacy.consent_policy.publish", "target_id": "consent_policy", "created_at": now})
     return {k: v for k, v in update.items() if k != "_id"}
 
@@ -6641,8 +6695,8 @@ async def readiness_check():
         checks["database"] = True
     except Exception:
         pass
-    checks["reservation_worker"] = bool(reservation_reaper_task and not reservation_reaper_task.done())
-    checks["notification_worker"] = bool(notification_outbox_task and not notification_outbox_task.done())
+    checks["reservation_worker"] = not RUN_BACKGROUND_WORKERS or bool(reservation_reaper_task and not reservation_reaper_task.done())
+    checks["notification_worker"] = not RUN_BACKGROUND_WORKERS or bool(notification_outbox_task and not notification_outbox_task.done())
     if NOTIFICATION_DELIVERY_ENABLED:
         checks["notification_provider"] = notification_channel_configured("email") or notification_channel_configured("sms")
     ready = all(checks.values())
@@ -6681,6 +6735,11 @@ async def metrics(request: Request):
         f'perfurm_notification_jobs{{status="blocked_configuration"}} {blocked_jobs}',
         "# TYPE perfurm_reserved_orders gauge",
         f"perfurm_reserved_orders {reserved_orders}",
+        "# TYPE perfurm_overload_rejections_total counter",
+        f"perfurm_overload_rejections_total {request_metrics['overload_rejections']}",
+        "# TYPE perfurm_public_cache_requests_total counter",
+        f'perfurm_public_cache_requests_total{{result="hit"}} {request_metrics["cache_hits"]}',
+        f'perfurm_public_cache_requests_total{{result="miss"}} {request_metrics["cache_misses"]}',
     ])
     return Response(content="\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 
@@ -6727,6 +6786,28 @@ async def http_error_handler(request: Request, exc: HTTPException):
     )
 
 @app.middleware("http")
+async def concurrency_guard(request: Request, call_next):
+    """Bound work admitted to the event loop and fail quickly instead of building an unbounded queue."""
+    if request.url.path in {"/health", "/ready", "/metrics"}:
+        return await call_next(request)
+    acquired = False
+    try:
+        await asyncio.wait_for(inflight_semaphore.acquire(), timeout=REQUEST_QUEUE_TIMEOUT_MS / 1000)
+        acquired = True
+    except asyncio.TimeoutError:
+        request_metrics["overload_rejections"] += 1
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Service is temporarily busy", "error": {"code": "OVERLOADED", "message": "Retry with backoff"}},
+            headers={"Retry-After": "1", "Cache-Control": "no-store"},
+        )
+    try:
+        return await call_next(request)
+    finally:
+        if acquired:
+            inflight_semaphore.release()
+
+@app.middleware("http")
 async def security_and_request_context(request: Request, call_next):
     request_started = time.perf_counter()
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
@@ -6770,6 +6851,8 @@ async def security_and_request_context(request: Request, call_next):
     response.headers["X-Permitted-Cross-Domain-Policies"] = "none"
     if path.startswith("/api/auth/") or path.startswith("/api/admin/"):
         response.headers["Cache-Control"] = "no-store"
+    elif request.method == "GET" and path in {"/api/products", "/api/catalog/bestsellers", "/api/storefront/reviews/top", "/api/privacy/consent/config"}:
+        response.headers["Cache-Control"] = f"public, max-age={PUBLIC_CACHE_TTL_SECONDS}, stale-while-revalidate=30"
     if response.headers.get("content-type", "").startswith("text/html"):
         response.headers["Content-Security-Policy"] = "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     if APP_ENV == "production":
@@ -7119,7 +7202,8 @@ async def startup_db():
         ])
         logger.info("Loaded preview creator campaigns")
     logger.info("Database indexes created")
-    if reservation_reaper_task is None or reservation_reaper_task.done():
-        reservation_reaper_task = asyncio.create_task(reservation_reaper_loop())
-    if notification_outbox_task is None or notification_outbox_task.done():
-        notification_outbox_task = asyncio.create_task(notification_outbox_loop())
+    if RUN_BACKGROUND_WORKERS:
+        if reservation_reaper_task is None or reservation_reaper_task.done():
+            reservation_reaper_task = asyncio.create_task(reservation_reaper_loop())
+        if notification_outbox_task is None or notification_outbox_task.done():
+            notification_outbox_task = asyncio.create_task(notification_outbox_loop())
