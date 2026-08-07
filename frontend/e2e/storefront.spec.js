@@ -9,7 +9,7 @@ test.describe('responsive storefront quality gate', () => {
     await expect(page.getByRole('heading', { name: 'Most Viewed' })).toBeVisible();
     await expect(page.getByRole('heading', { name: /The signatures/i })).toBeVisible();
     await expect(page.getByText('The house signatures')).toBeVisible();
-    await expect(page.getByRole('region', { name: 'House signature collection' }).getByRole('button').first()).toBeVisible();
+    await expect(page.locator('section[aria-label="House signature collection"] button').first()).toBeVisible();
     const dismissOffer = page.getByRole('button', { name: 'Maybe later' });
     if (await dismissOffer.isVisible({ timeout: 10_000 }).catch(() => false)) await dismissOffer.click();
     await expect(page.getByRole('heading', { name: 'Offers for every guest' })).toBeVisible();
@@ -125,4 +125,35 @@ test('product media gallery and ordering choices remain responsive', async ({ pa
   expect(new Set(prices).size).toBeGreaterThan(1);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(1);
+});
+
+test('customer can update a saved address and place an order', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name === 'tablet-chromium', 'Covered on desktop and mobile checkout layouts');
+  await page.goto('/auth');
+  await page.getByPlaceholder('Enter your email').fill('customer@example.com');
+  await page.getByPlaceholder('Enter your password').fill('customer123');
+  await page.getByRole('button', { name: /^login$/i }).click();
+  await expect(page).toHaveURL(/localhost:3000\/$/);
+  const acceptCookies = page.getByRole('button', { name: 'Accept all' });
+  if (await acceptCookies.isVisible({ timeout: 3_000 }).catch(() => false)) await acceptCookies.click();
+
+  const productsResponse = await page.request.get('/api/products');
+  const products = await productsResponse.json();
+  const product = products.find(item => item.variants?.some(variant => variant.is_active !== false));
+  const variant = product.variants.find(item => item.is_active !== false);
+  await page.evaluate(({ product, variant }) => localStorage.setItem('cart', JSON.stringify([{
+    product_id: product.id, variant_id: variant.id, size: variant.label,
+    name: product.name, price: variant.price, quantity: 1, image: product.images?.[0],
+  }])), { product, variant });
+
+  await page.goto('/customer/checkout');
+  await page.getByRole('button', { name: /edit/i }).first().click();
+  await expect(page.getByRole('heading', { name: 'Edit Delivery Address' })).toBeVisible();
+  await page.getByLabel('Address Line 2 (Optional)').fill('Checkout regression area');
+  await page.getByRole('button', { name: 'Update Address' }).click();
+  await expect(page.getByText('Checkout regression area').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Continue to Payment' }).click();
+  await expect(page.getByRole('button', { name: /Place Order|Pay Now/ })).toBeEnabled();
+  await page.getByRole('button', { name: /Place Order|Pay Now/ }).click();
+  await expect(page.getByRole('heading', { name: 'Order Placed Successfully!' })).toBeVisible({ timeout: 30_000 });
 });

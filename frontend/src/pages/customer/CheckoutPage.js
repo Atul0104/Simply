@@ -163,7 +163,9 @@ export default function CheckoutPage() {
   };
 
   const openEditAddress = (address) => {
-    setEditingAddressId(address.id); setAddressErrors({}); setAddressForm({ ...address }); setShowNewAddressDialog(true);
+    setEditingAddressId(address.id); setAddressErrors({});
+    setAddressForm({ ...address, address_line2: address.address_line2 || '', landmark: address.landmark || '' });
+    setShowNewAddressDialog(true);
   };
 
   const handleAddNewAddress = async () => {
@@ -265,7 +267,7 @@ export default function CheckoutPage() {
     const selectedAddress = getSelectedAddress();
     
     const orderData = {
-      items: cart,
+      items: cart.map(({ product_id, variant_id, size, quantity }) => ({ product_id, variant_id, size, quantity })),
       total_amount: total,
       payment_method: paymentMethod === 'cod' ? 'cod' : 'online',
       coupon_code: couponApplied?.code || null,
@@ -276,7 +278,7 @@ export default function CheckoutPage() {
         city: selectedAddress.city,
         state: selectedAddress.state,
         pincode: selectedAddress.pincode,
-        landmark: selectedAddress.landmark
+        landmark: selectedAddress.landmark || ''
       }
     };
 

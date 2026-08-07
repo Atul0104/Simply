@@ -1068,7 +1068,7 @@ function HomePage() {
         
         {/* Most Viewed Products */}
         {visibility.show_most_viewed && mostViewed.length > 0 && (
-          <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55 }} className="order-[20] mb-10 bg-[#171514] p-5 text-white sm:mb-14 sm:p-8">
+          <motion.section initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.55 }} className="order-[20] mb-10 sm:mb-14">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <Eye className="w-6 h-6 text-blue-600" />
@@ -1076,11 +1076,11 @@ function HomePage() {
               </div>
               <Button variant="link" onClick={() => navigate('/customer/category/all')}>View All →</Button>
             </div>
-            <div className="flex gap-3.5 sm:gap-5 overflow-x-auto no-scrollbar pb-4">
+            <div className="grid grid-cols-2 gap-3.5 sm:flex sm:gap-5 sm:overflow-x-auto sm:pb-4 no-scrollbar">
               {(Array.isArray(mostViewed) ? mostViewed : [])
                 .slice(0, 6)
                 .map((product) => (
-                  <div key={product.id} className="min-w-[170px] sm:min-w-[205px] max-w-[220px] flex-shrink-0">
+                  <div key={product.id} className="min-w-0 sm:min-w-[205px] sm:max-w-[220px] sm:flex-shrink-0">
                   <ProductCard
                     product={product}
                     onClick={() => navigate(`/customer/product/${product.slug || product.id}`)}
@@ -1127,7 +1127,7 @@ function HomePage() {
 
         {/* Featured/Trending Products */}
         {visibility.show_trending && trending.length > 0 && (
-          <section className="order-[30] mb-10 bg-[#171514] p-5 text-white sm:mb-14 sm:p-8">
+          <section className="order-[30] mb-10 sm:mb-14">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <TrendingUp className="w-6 h-6 text-orange-500" />
@@ -1135,9 +1135,9 @@ function HomePage() {
               </div>
               <Button variant="link" onClick={() => setSelectedCategory(null)}>View All →</Button>
             </div>
-            <div className="flex gap-3.5 sm:gap-5 overflow-x-auto no-scrollbar pb-4">
+            <div className="grid grid-cols-2 gap-3.5 sm:flex sm:gap-5 sm:overflow-x-auto sm:pb-4 no-scrollbar">
               {(Array.isArray(trending) ? trending : []).slice(0, 6).map((product) => (
-                <div key={product.id} className="min-w-[170px] sm:min-w-[205px] max-w-[220px] flex-shrink-0">
+                <div key={product.id} className="min-w-0 sm:min-w-[205px] sm:max-w-[220px] sm:flex-shrink-0">
                   <ProductCard product={product} onClick={() => navigate(`/customer/product/${product.slug || product.id}`)} />
                 </div>
               ))}
@@ -1148,16 +1148,16 @@ function HomePage() {
         <motion.section initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="order-[60] mb-12 overflow-hidden bg-[#2b2422] p-5 text-white sm:mb-16 sm:p-8">
           <div className="mb-5 flex items-end justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[0.3em] text-[#d3aaa3]">The Perfurm edit</p><h2 className="display-serif mt-2 text-3xl sm:text-4xl">Stories selected by the house.</h2></div><p className="hidden max-w-sm text-right text-sm text-stone-400 sm:block">Ordered and updated from Hero &amp; Edit Management.</p></div>
           <div className="flex snap-x gap-4 overflow-x-auto pb-3 no-scrollbar">
-            {offers.slice(0, 6).map((story, index) => <button key={`${story.title}-${index}`} type="button" onClick={() => navigate(story.link)} className="group relative min-h-[260px] min-w-[78%] snap-start overflow-hidden text-left sm:min-w-[340px] lg:min-w-[390px]">
+            {offers.slice(0, 6).map((story, index) => <article key={`${story.title}-${index}`} className="group relative min-h-[360px] min-w-[88%] snap-start overflow-hidden text-left sm:min-w-[480px] lg:min-h-[420px] lg:min-w-[560px]">
               {story.media_type === 'video' ? <video src={story.image} className="absolute inset-0 h-full w-full object-cover" autoPlay muted loop playsInline preload="metadata" /> : <img src={story.image} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />}
               <span className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/15 to-transparent" />
-              <span className="absolute inset-x-0 bottom-0 p-5"><span className="block text-[10px] uppercase tracking-[.2em] text-[#e7c991]">Edit {String(index + 1).padStart(2, '0')}</span><span className="display-serif mt-1 block text-2xl">{story.title}</span><span className="mt-2 line-clamp-2 block text-sm text-white/70">{story.subtitle}</span></span>
-            </button>)}
+              <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8"><span className="block text-[10px] uppercase tracking-[.2em] text-[#e7c991]">Edit {String(index + 1).padStart(2, '0')}</span><h3 className="display-serif mt-1 text-3xl">{story.title}</h3><p className="mt-3 max-w-xl text-sm leading-6 text-white/75">{story.subtitle}</p><Button type="button" onClick={() => navigate(story.link)} className="mt-5 rounded-full bg-white px-6 text-stone-950 hover:bg-stone-100">{story.cta || 'Discover the edit'} <ArrowUpRight className="ml-2 h-4 w-4" /></Button></div>
+            </article>)}
           </div>
         </motion.section>
 
         {visibility.show_bestsellers && bestsellers.length > 0 && (
-          <section className="order-[40] mb-10 bg-[#171514] p-5 text-white sm:mb-14 sm:p-8">
+          <section className="order-[40] mb-10 sm:mb-14">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
                 <Star className="w-5 h-5 text-[#6f3b49]" />
@@ -1165,9 +1165,9 @@ function HomePage() {
               </div>
               <Button variant="link" onClick={() => navigate('/customer/category/all')}>View All →</Button>
             </div>
-            <div className="flex gap-3.5 sm:gap-5 overflow-x-auto no-scrollbar pb-4">
+            <div className="grid grid-cols-2 gap-3.5 sm:flex sm:gap-5 sm:overflow-x-auto sm:pb-4 no-scrollbar">
               {bestsellers.slice(0, 6).map((product) => (
-                <div key={product.id} className="min-w-[170px] sm:min-w-[205px] max-w-[220px] flex-shrink-0">
+                <div key={product.id} className="min-w-0 sm:min-w-[205px] sm:max-w-[220px] sm:flex-shrink-0">
                   <ProductCard product={product} onClick={() => navigate(`/customer/product/${product.slug || product.id}`)} />
                 </div>
               ))}

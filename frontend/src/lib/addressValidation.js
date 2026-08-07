@@ -58,12 +58,12 @@ export const validateAddress = (address) => {
 
 export const cleanAddress = (address) => ({
   ...address,
-  name: address.name.trim(),
-  phone: address.phone.trim(),
-  pincode: address.pincode.trim(),
-  address_line1: address.address_line1.trim(),
-  address_line2: address.address_line2.trim() || null,
-  city: address.city.trim(),
-  state: address.state.trim(),
-  landmark: address.landmark.trim() || null,
+  name: String(address.name || '').trim(),
+  phone: String(address.phone || '').trim(),
+  pincode: String(address.pincode || '').trim(),
+  address_line1: String(address.address_line1 || '').trim(),
+  address_line2: String(address.address_line2 || '').trim() || null,
+  city: String(address.city || '').trim(),
+  state: String(address.state || '').trim(),
+  landmark: String(address.landmark || '').trim() || null,
 });
