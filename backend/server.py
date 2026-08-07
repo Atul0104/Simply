@@ -5315,6 +5315,13 @@ async def get_payment_config():
 @api_router.get("/admin/integrations/status")
 async def integration_status(user: Dict[str, Any] = Depends(require_role([UserRole.ADMIN]))):
     """Configuration-only readiness; never exposes provider secrets."""
+    operational = {
+        "failed_payments": await db.orders.count_documents({"payment_status": {"$in": ["failed", "expired"]}}),
+        "refunds_pending": await db.refunds.count_documents({"status": "pending"}),
+        "shipping_failures": await db.shipping_labels.count_documents({"status": {"$in": ["failed", "error"]}}),
+        "notification_failures": await db.notification_jobs.count_documents({"status": {"$in": ["blocked_configuration", "dead"]}}),
+        "low_stock_variants": await db.variant_inventory.count_documents({"available_quantity": {"$lte": 5}}),
+    }
     return {
         "environment": APP_ENV,
         "payments": {"provider": "razorpay", "configured": bool(razorpay_client and os.environ.get("RAZORPAY_WEBHOOK_SECRET"))},
@@ -5324,7 +5331,12 @@ async def integration_status(user: Dict[str, Any] = Depends(require_role([UserRo
         "reverse_geocoding": {"provider": "configured_http_adapter", "configured": "{latitude}" in REVERSE_GEOCODING_URL and "{longitude}" in REVERSE_GEOCODING_URL},
         "database": {"provider": "mongodb", "configured": bool(mongo_url)},
         "monitoring": {"provider": "prometheus", "configured": bool(METRICS_TOKEN)},
+        "media": {"provider": "cloudinary", "configured": bool(os.environ.get("CLOUDINARY_CLOUD_NAME") and os.environ.get("CLOUDINARY_API_KEY") and os.environ.get("CLOUDINARY_API_SECRET"))},
+        "bot_protection": {"provider": "cloudflare_turnstile", "configured": bool(os.environ.get("TURNSTILE_SECRET_KEY"))},
+        "product_analytics": {"provider": "ga4", "configured": bool(os.environ.get("GA_MEASUREMENT_ID"))},
+        "log_delivery": {"provider": "better_stack", "configured": bool(os.environ.get("BETTERSTACK_SOURCE_TOKEN"))},
         "notifications_enabled": NOTIFICATION_DELIVERY_ENABLED,
+        "operational": operational,
     }
 
 @api_router.post("/payments/demo-confirm")

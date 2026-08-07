@@ -1,5 +1,7 @@
 # Perfurm
 
+Production release documentation: [readiness audit](PRODUCTION_READINESS_AUDIT.md), [environment setup](ENVIRONMENT_SETUP.md), [API contract](API_CONTRACT.md), [third-party integrations](THIRD_PARTY_INTEGRATIONS.md), [deployment checklist](DEPLOYMENT_CHECKLIST.md), [security report](SECURITY_HARDENING_REPORT.md), [backup/restore](BACKUP_RESTORE_RUNBOOK.md), [incident response](INCIDENT_RESPONSE_RUNBOOK.md), [testing strategy](TESTING_STRATEGY.md), and [launch checklist](PRODUCTION_LAUNCH_CHECKLIST.md).
+
 Perfurm is a single-brand perfume-commerce application built with React, FastAPI and MongoDB. The supported application profiles are Customer, Admin and Super Admin. Legacy seller and delivery data models remain for fulfilment compatibility, but those users do not have public application portals.
 
 ## Capabilities

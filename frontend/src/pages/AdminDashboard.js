@@ -147,6 +147,7 @@ function AdminHeader({ user, logout, navigate, adminView, setAdminView }) {
 
 function AdminHome({ adminView, setAdminView }) {
   const [stats, setStats] = useState(null);
+  const [readiness, setReadiness] = useState(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -183,8 +184,12 @@ function AdminHome({ adminView, setAdminView }) {
 
   const fetchStats = async () => {
     try {
-      const response = await axios.get(`${API_URL}/analytics/admin`);
-      setStats(response.data);
+      const [statsResponse, readinessResponse] = await Promise.all([
+        axios.get(`${API_URL}/analytics/admin`),
+        axios.get(`${API_URL}/admin/integrations/status`),
+      ]);
+      setStats(statsResponse.data);
+      setReadiness(readinessResponse.data);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
@@ -210,6 +215,8 @@ function AdminHome({ adminView, setAdminView }) {
           <h2 className="text-2xl font-bold">Platform Overview</h2>
           <p className="text-gray-600">Manage the Perfurm fragrance marketplace</p>
         </div>
+
+        {readiness && user?.admin_role === 'super_admin' && <Card className="mb-6 border-violet-200"><CardHeader><CardTitle className="flex items-center gap-2 text-lg"><ShieldCheck className="h-5 w-5 text-violet-700"/>Production readiness</CardTitle></CardHeader><CardContent><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{Object.entries(readiness).filter(([, value]) => value && typeof value === 'object' && 'configured' in value).map(([key, value]) => <div key={key} className="min-w-0 rounded-xl border bg-white p-3"><p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{key.replaceAll('_', ' ')}</p><div className="mt-2 flex flex-wrap items-center justify-between gap-2"><span className="min-w-0 break-words text-sm font-medium capitalize">{value.provider.replaceAll('_', ' ')}</span><span className={`rounded-full px-2 py-1 text-[10px] font-bold ${value.configured ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}`}>{value.configured ? 'Connected' : 'Configuration required'}</span></div></div>)}</div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">{Object.entries(readiness.operational || {}).map(([key, value]) => <button type="button" key={key} onClick={() => navigate(key.includes('stock') ? '/admin/inventory' : key.includes('shipping') || key.includes('payment') || key.includes('refund') ? '/admin/orders' : '/admin/notifications')} className="rounded-lg bg-stone-50 p-3 text-left hover:bg-stone-100"><span className="block text-xl font-bold">{value}</span><span className="text-xs capitalize text-stone-500">{key.replaceAll('_', ' ')}</span></button>)}</div><p className="mt-3 text-xs text-stone-500">Status reports configuration and operational counts only. It never exposes credentials.</p></CardContent></Card>}
 
         {stats && (
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

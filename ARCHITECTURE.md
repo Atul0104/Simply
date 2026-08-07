@@ -1,5 +1,7 @@
 # Architecture
 
+> Current shape: a production-hardened modular monolith. Commerce correctness is implemented in FastAPI/MongoDB, but `backend/server.py` remains an acknowledged maintainability hotspot. Extraction into routes/services/repositories/provider adapters must be incremental and protected by the existing API tests; a pre-launch rewrite is explicitly rejected.
+
 ```text
 Browser (React, consent/auth/cart)
   | HTTPS /api + bearer access token; refresh/CSRF cookies

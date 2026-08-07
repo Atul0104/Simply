@@ -59,6 +59,15 @@ def main() -> int:
     if args.require_commerce_providers:
         for key in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "SHIPPING_PROVIDER_API_URL", "SHIPPING_PROVIDER_API_TOKEN", "SHIPPING_PROVIDER_WEBHOOK_SECRET"):
             if not env.get(key): errors.append(f"{key} is required for commerce-provider qualification")
+    provider_groups = {
+        "Cloudinary": ("CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"),
+        "Brevo": ("BREVO_API_KEY", "BREVO_SENDER_EMAIL"),
+        "Turnstile": ("TURNSTILE_SECRET_KEY", "REACT_APP_TURNSTILE_SITE_KEY"),
+    }
+    for provider, keys in provider_groups.items():
+        populated = [key for key in keys if env.get(key)]
+        if populated and len(populated) != len(keys):
+            errors.append(f"{provider} configuration is partial; set all of: {', '.join(keys)}")
     if errors:
         print("Release environment is NOT ready:")
         for error in errors: print(f"- {error}")

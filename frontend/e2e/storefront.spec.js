@@ -71,6 +71,8 @@ test('admin can sign in and reach permission-aware operations', async ({ page })
   await page.getByPlaceholder('Enter your password').fill('admin123');
   await page.getByRole('button', { name: /^login$/i }).click();
   await expect(page).toHaveURL(/\/admin/);
+  await expect(page.getByText('Production readiness', { exact: true })).toBeVisible();
+  await expect(page.getByText('Configuration required').first()).toBeVisible();
   await page.getByTestId('menu-btn').click();
   await expect(page.getByRole('button', { name: /admin staff/i })).toBeVisible();
   const adminMode = page.getByRole('switch');

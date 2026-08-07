@@ -102,5 +102,12 @@ def test_admin_integration_status_never_exposes_secrets():
         assert response.status_code == 200
         body = response.json()
         assert set(body["payments"]) == {"provider", "configured"}
+        assert set(body["operational"]) == {
+            "failed_payments", "refunds_pending", "shipping_failures",
+            "notification_failures", "low_stock_variants",
+        }
+        assert all(isinstance(value, int) and value >= 0 for value in body["operational"].values())
+        assert body["media"]["provider"] == "cloudinary"
+        assert body["bot_protection"]["provider"] == "cloudflare_turnstile"
         serialized = response.text.lower()
         assert "secret" not in serialized and "password" not in serialized
