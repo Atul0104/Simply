@@ -7,6 +7,9 @@ test.describe('responsive storefront quality gate', () => {
     page.on('pageerror', error => runtimeErrors.push(error.message));
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expect(page.getByRole('heading', { name: 'Most Viewed' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Four moods.*One commanding presence/i })).toBeVisible();
+    await expect(page.getByText('The house signatures')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'House signature collection' }).getByRole('button', { name: /Velvet Oud Eau de Parfum/i })).toBeVisible();
     const dismissOffer = page.getByRole('button', { name: 'Maybe later' });
     if (await dismissOffer.isVisible({ timeout: 10_000 }).catch(() => false)) await dismissOffer.click();
     await expect(page.getByRole('heading', { name: 'Offers for every guest' })).toBeVisible();

@@ -7127,6 +7127,27 @@ async def startup_db():
             for product in preview_products if product["id"] not in variant_product_ids
         ])
         logger.info("Loaded Perfurm preview catalog")
+    if USE_MOCK_DB:
+        # Keep existing preview databases visually representative after UI upgrades.
+        # This is deliberately mock-only and never alters a real catalogue.
+        preview_gallery_pool = [
+            "https://images.unsplash.com/photo-1541643600914-78b084683601?w=1200",
+            "https://images.unsplash.com/photo-1594035910387-fea47794261f?w=1200",
+            "https://images.unsplash.com/photo-1592945403244-b3fbafd7f539?w=1200",
+            "https://images.unsplash.com/photo-1615634260167-c8cdede054de?w=1200",
+            "https://images.unsplash.com/photo-1610461888750-10bfc601b874?w=1200",
+            "https://images.unsplash.com/photo-1563170351-be82bc888aa4?w=1200",
+        ]
+        preview_media_products = await db.products.find({}, {"_id": 0, "id": 1, "sku": 1, "images": 1}).sort("sku", 1).to_list(100)
+        for index, preview_product in enumerate(preview_media_products):
+            current_images = [url for url in preview_product.get("images", []) if url]
+            additional_images = [preview_gallery_pool[(index + offset) % len(preview_gallery_pool)] for offset in range(3)]
+            gallery = list(dict.fromkeys([*current_images, *additional_images]))[:4]
+            media_update = {"images": gallery}
+            if preview_product.get("sku") in {"PFM001", "PFM002", "PFM004", "PFM006"}:
+                media_update["videos"] = ["https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"]
+            await db.products.update_one({"id": preview_product["id"]}, {"$set": media_update})
+        logger.info("Enriched preview products with responsive multi-media galleries")
     if USE_MOCK_DB and await db.reviews.count_documents({}) == 0:
         review_products = await db.products.find({"is_active": True}, {"_id": 0, "id": 1}).sort("sku", 1).to_list(10)
         demo_reviews = [

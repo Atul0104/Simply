@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger, DropdownMenuSub, DropdownMenuSubTrigger, DropdownMenuSubContent } from '@/components/ui/dropdown-menu';
-import { ShoppingCart, User, Search, Menu, Star, Heart, Package, Bell, LogOut, Home, Shirt, Baby, Gem, Snowflake, Percent, Footprints, Sparkles, HelpCircle, ChevronLeft, ChevronRight, Settings, Eye, TrendingUp, X, Phone, Mail, Facebook, Instagram, Twitter, Youtube, ChevronDown, ShieldCheck, Truck, RefreshCw, Gift, ArrowUpRight, Quote, CheckCheck, Copy, Check, Volume2, VolumeX, Clock3 } from 'lucide-react';
+import { ShoppingCart, User, Search, Menu, Star, Heart, Package, Bell, LogOut, Home, Shirt, Baby, Gem, Snowflake, Percent, Footprints, Sparkles, HelpCircle, ChevronLeft, ChevronRight, Settings, Eye, TrendingUp, X, Phone, Mail, Facebook, Instagram, Twitter, Youtube, ChevronDown, ShieldCheck, Truck, RefreshCw, Gift, ArrowUpRight, Quote, CheckCheck, Copy, Check, Volume2, VolumeX, Clock3, Crown } from 'lucide-react';
 import ProductDetails from './customer/ProductDetails';
 import CartPage from './customer/CartPage';
 import CheckoutPage from './customer/CheckoutPage';
@@ -1029,6 +1029,26 @@ function HomePage() {
             <p className="text-lg">Welcome back, <span className="font-semibold">{user.name}</span>! 👋</p>
           </motion.div>
         )}
+
+        {products.length > 0 && <motion.section aria-label="House signature collection" initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} className="mb-12 overflow-hidden bg-[#171514] text-white sm:mb-16">
+          <div className="grid lg:grid-cols-[.72fr_1.28fr]">
+            <div className="flex flex-col justify-center border-b border-white/10 p-7 sm:p-10 lg:border-b-0 lg:border-r lg:p-14">
+              <Crown className="h-7 w-7 text-[#d4ae72]" />
+              <p className="mt-7 text-[10px] font-semibold uppercase tracking-[.32em] text-[#d4ae72]">The house signatures</p>
+              <h2 className="display-serif mt-3 text-4xl leading-[1.02] sm:text-5xl">Four moods.<br/>One commanding presence.</h2>
+              <p className="mt-5 max-w-md text-sm leading-7 text-stone-300">Meet the fragrances that define the Perfurm house—from luminous freshness to a deep after-dark trail. Choose the character that feels unmistakably yours.</p>
+              <Button onClick={() => navigate('/customer/category/all')} variant="outline" className="mt-7 w-fit rounded-full border-white/30 bg-transparent px-6 text-white hover:bg-white hover:text-stone-950">Discover the collection <ArrowUpRight className="ml-2 h-4 w-4"/></Button>
+            </div>
+            <div className="grid grid-cols-2">
+              {products.slice(0, 4).map((product, index) => <button key={product.id} type="button" onClick={() => navigate(`/customer/product/${product.slug || product.id}`)} className="group relative min-h-[245px] overflow-hidden border-white/10 text-left even:border-l sm:min-h-[330px] lg:min-h-[390px]">
+                <img src={product.images?.[0] || '/placeholder-perfume.svg'} alt={product.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black via-black/15 to-transparent" />
+                <span className="absolute left-4 top-4 grid h-8 w-8 place-items-center rounded-full border border-white/35 bg-black/20 text-xs backdrop-blur sm:left-5 sm:top-5">0{index + 1}</span>
+                <span className="absolute inset-x-0 bottom-0 p-4 sm:p-6"><span className="block text-[10px] uppercase tracking-[.2em] text-[#e7c991]">{product.fragrance_family || product.category}</span><span className="display-serif mt-1 block text-xl leading-tight sm:text-2xl">{product.name}</span><span className="mt-2 block text-xs text-white/70">From ₹{Number(product.price || 0).toLocaleString('en-IN')}</span></span>
+              </button>)}
+            </div>
+          </div>
+        </motion.section>}
         
         {/* Most Viewed Products */}
         {visibility.show_most_viewed && mostViewed.length > 0 && (
