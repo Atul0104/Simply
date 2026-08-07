@@ -50,6 +50,7 @@ dump.rdb
 cloudflared-preview*
 playwright-report/
 test-results/
+frontend/product-*.png
 
 # Local databases and generated data
 *.db

@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { ArrowLeft, Package, Heart, Star, Share2, MapPin, Truck, RotateCcw, Shield, ChevronRight, Plus, Minus, Zap, Store, MessageCircle, Check, X, ShoppingCart, Bell } from 'lucide-react';
+import { Package, Heart, Star, Share2, Truck, RotateCcw, Shield, ChevronRight, Plus, Minus, Zap, MessageCircle, Check, X, ShoppingCart, Bell, Sparkles, Droplets, Clock3, Wind, Award, Leaf } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 import BottleLoader from '@/components/BottleLoader';
@@ -210,9 +210,19 @@ export default function ProductDetails() {
   const totalReviews = reviewSummary?.total_reviews || 0;
   const inStock = selectedVariant ? Number(selectedVariant.stock_quantity ?? 0) > 0 : Number(product.stock_quantity ?? 1) > 0;
   const displayImage = selectedVariant?.image || product.images?.[selectedImage] || product.images?.[0];
+  const toNotes = (value) => Array.isArray(value) ? value : String(value || '').split(',').map(note => note.trim()).filter(Boolean);
+  const topNotes = toNotes(product.top_notes);
+  const middleNotes = toNotes(product.middle_notes);
+  const baseNotes = toNotes(product.base_notes);
+  const fallbackNotes = toNotes(product.specifications?.Notes || product.specifications?.notes);
+  const hasNotePyramid = topNotes.length + middleNotes.length + baseNotes.length > 0;
+  const scentFamily = product.fragrance_family || product.specifications?.['Fragrance Family'] || 'Signature blend';
+  const concentration = product.concentration || product.specifications?.Concentration || 'Eau de Parfum';
+  const sizeMl = Number(selectedVariant?.size_ml || String(selectedSize).match(/\d+/)?.[0] || 0);
+  const pricePerMl = sizeMl > 0 ? Math.round(displayPrice / sizeMl) : null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-[#f7f3ed] text-stone-900">
       <Seo
         title={product.seo_title || product.name}
         description={product.seo_description || product.short_description || product.description}
@@ -227,7 +237,7 @@ export default function ProductDetails() {
           ...(product.review_count > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: product.average_rating, reviewCount: product.review_count } } : {}),
         }}
       />
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
+      <div className="mx-auto max-w-[1440px] px-3 py-4 sm:px-6 sm:py-7 lg:px-8">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mb-4 overflow-hidden whitespace-nowrap">
           <span onClick={() => navigate('/')} className="cursor-pointer hover:text-blue-600">Home</span>
@@ -237,18 +247,19 @@ export default function ProductDetails() {
           <span className="text-gray-900 truncate">{product.name}</span>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-5 lg:gap-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.08fr)_minmax(390px,.92fr)] lg:gap-10 xl:gap-14">
           {/* Images Section */}
-          <div className="space-y-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="aspect-square bg-gray-100 rounded-lg overflow-hidden mb-4 relative group">
+          <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+            <Card className="overflow-hidden border-stone-200/80 bg-[#eee7dd] shadow-[0_24px_70px_-35px_rgba(60,38,30,.45)]">
+              <CardContent className="p-3 sm:p-5">
+                <div className="group relative mb-4 aspect-[4/5] max-h-[720px] overflow-hidden rounded-2xl bg-[radial-gradient(circle_at_50%_34%,#fff_0%,#eee6da_48%,#ded2c2_100%)]">
+                  <div className="absolute left-4 top-4 z-10 flex flex-wrap gap-2"><Badge className="bg-stone-950 text-white hover:bg-stone-950">{concentration}</Badge>{product.is_new_arrival && <Badge className="bg-[#7d4956] text-white">New ritual</Badge>}{discount > 0 && <Badge className="bg-white text-[#6f3b49] shadow-sm">Save {discount}%</Badge>}</div>
                   <AnimatePresence mode="wait">
                     <motion.img
                       key={displayImage}
                       src={displayImage}
                       alt={product.name}
-                      className="w-full h-full object-contain mix-blend-multiply cursor-zoom-in p-3 sm:p-6"
+                      className="h-full w-full cursor-zoom-in object-contain p-5 mix-blend-multiply transition-transform duration-700 group-hover:scale-[1.025] sm:p-10"
                       onClick={() => setShowImageZoom(true)}
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
@@ -257,7 +268,8 @@ export default function ProductDetails() {
                   </AnimatePresence>
                   <button
                     onClick={toggleWishlist}
-                    className="absolute top-4 right-4 bg-white rounded-full p-2 shadow-lg hover:scale-110 transition-transform"
+                    className="absolute right-4 top-4 z-20 rounded-full bg-white/90 p-2.5 shadow-lg backdrop-blur transition-transform hover:scale-105"
+                    aria-label={isWishlisted ? 'Remove from wishlist' : 'Add to wishlist'}
                   >
                     <Heart className={`w-6 h-6 ${isWishlisted ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
                   </button>
@@ -265,16 +277,16 @@ export default function ProductDetails() {
 
                 {/* Thumbnail Images */}
                 {product.images && product.images.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto">
+                  <div className="flex snap-x gap-2 overflow-x-auto pb-1">
                     {product.images.map((img, idx) => (
                       <button
                         key={idx}
                         onClick={() => setSelectedImage(idx)}
-                        className={`flex-shrink-0 w-20 h-20 rounded border-2 overflow-hidden ${
-                          selectedImage === idx ? 'border-blue-500' : 'border-gray-200'
+                        className={`h-20 w-20 flex-shrink-0 snap-start overflow-hidden rounded-xl border-2 bg-[#eee7dd] ${
+                          selectedImage === idx ? 'border-[#6f3b49]' : 'border-transparent hover:border-stone-300'
                         }`}
                       >
-                        <img src={img} alt="" className="w-full h-full object-cover" />
+                        <img src={img} alt={`${product.name} view ${idx + 1}`} className="h-full w-full object-contain p-1 mix-blend-multiply" />
                       </button>
                     ))}
                   </div>
@@ -282,89 +294,65 @@ export default function ProductDetails() {
 
                 {/* Action Buttons */}
                 <div className="mt-4">
-                  <Button variant="outline" onClick={shareProduct} className="w-full">
+                  <Button variant="outline" onClick={shareProduct} className="w-full rounded-full border-stone-300 bg-white/60">
                     <Share2 className="w-4 h-4 mr-2" /> Share
                   </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Seller Info */}
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <Store className="w-8 h-8 text-blue-600" />
-                  <div className="flex-1">
-                    <p className="font-semibold">Sold by: Premium Seller</p>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span>4.5 Seller Rating</span>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">View Store</Button>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-3 gap-2 rounded-2xl border border-stone-200 bg-white/70 p-3 text-center shadow-sm">
+              <div className="px-1"><Award className="mx-auto h-5 w-5 text-[#7d4956]"/><p className="mt-1 text-xs font-semibold sm:text-sm">Authentic</p><p className="hidden text-xs text-stone-500 sm:block">Quality checked</p></div>
+              <div className="border-x border-stone-200 px-1"><Shield className="mx-auto h-5 w-5 text-[#7d4956]"/><p className="mt-1 text-xs font-semibold sm:text-sm">Secure</p><p className="hidden text-xs text-stone-500 sm:block">Protected checkout</p></div>
+              <div className="px-1"><RotateCcw className="mx-auto h-5 w-5 text-[#7d4956]"/><p className="mt-1 text-xs font-semibold sm:text-sm">Easy support</p><p className="hidden text-xs text-stone-500 sm:block">Policy-backed help</p></div>
+            </div>
           </div>
 
           {/* Product Details Section */}
-          <div className="space-y-4">
+          <div className="space-y-5 lg:pt-2">
             <div>
-              <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
-              <p className="text-gray-600">{product.description}</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.24em] text-[#7d4956]">{product.brand || 'Perfurm'} · {scentFamily}</p>
+              <h1 className="display-serif text-4xl font-semibold leading-[1.05] sm:text-5xl">{product.name}</h1>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600">{product.short_description || product.description}</p>
             </div>
 
             {/* Rating */}
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-1 bg-green-600 text-white px-3 py-1 rounded">
+            <button type="button" onClick={() => document.getElementById('product-reviews')?.scrollIntoView({ behavior: 'smooth' })} className="flex w-fit items-center gap-3 rounded-full border border-stone-200 bg-white px-3 py-2 text-left shadow-sm">
+              <div className="flex items-center gap-1 rounded-full bg-[#5f342f] px-2.5 py-1 text-white">
                 <span className="font-semibold">{avgRating}</span>
                 <Star className="w-4 h-4 fill-white" />
               </div>
-              <span className="text-gray-600">{totalReviews.toLocaleString()} ratings & {reviews.length} reviews</span>
-            </div>
+              <span className="text-sm text-stone-600">{totalReviews.toLocaleString()} verified ratings</span>
+              <ChevronRight className="h-4 w-4 text-stone-400"/>
+            </button>
 
             {/* Price */}
-            <Card className="bg-gradient-to-r from-blue-50 to-purple-50">
-              <CardContent className="p-4">
+            <Card className="border-[#dbcac3] bg-gradient-to-br from-[#fffaf5] to-[#f2e9e1] shadow-none">
+              <CardContent className="p-5">
                 <div className="flex items-baseline gap-3 mb-2">
-                  <span className="text-4xl font-bold text-green-600">₹{displayPrice.toLocaleString()}</span>
+                  <span className="text-4xl font-semibold tracking-tight text-[#4b2927]">₹{displayPrice.toLocaleString('en-IN')}</span>
                   {displayMrp > displayPrice && (
                     <>
-                      <span className="text-xl text-gray-500 line-through">₹{displayMrp.toLocaleString()}</span>
-                      <Badge className="bg-red-500 text-lg px-3">{discount}% off</Badge>
+                      <span className="text-lg text-stone-400 line-through">₹{displayMrp.toLocaleString('en-IN')}</span>
+                      <Badge className="bg-[#7d4956] px-3 text-sm text-white">{discount}% off</Badge>
                     </>
                   )}
                 </div>
-                <p className="text-sm text-gray-600">Shipping is calculated from your delivery pincode at checkout</p>
-                {displayMrp > displayPrice && <p className="text-green-600 font-semibold mt-2">You save ₹{(displayMrp - displayPrice).toLocaleString()}!</p>}
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-stone-600"><span>Inclusive of applicable taxes</span>{pricePerMl && <span>₹{pricePerMl}/ml</span>}</div>
+                {displayMrp > displayPrice && <p className="mt-2 font-semibold text-emerald-700">You save ₹{(displayMrp - displayPrice).toLocaleString('en-IN')}</p>}
               </CardContent>
             </Card>
 
-            {/* Offers */}
-            <Card>
-              <CardContent className="p-4">
-                <h3 className="font-semibold mb-3">Available Offers</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-start gap-2">
-                    <Zap className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                    <p><span className="font-semibold">Bank Offer:</span> 10% Instant Discount on Bank Credit Cards</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Zap className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                    <p><span className="font-semibold">Special Price:</span> Get extra 5% off (price inclusive of discount)</p>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <Zap className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                    <p><span className="font-semibold">Partner Offer:</span> Purchase now & get 1 surprise cashback coupon</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="grid grid-cols-3 overflow-hidden rounded-2xl bg-[#211c1b] text-white shadow-sm">
+              <div className="p-3 sm:p-4"><Droplets className="h-5 w-5 text-[#d9b9ad]"/><p className="mt-2 text-xs font-semibold sm:text-sm">{concentration}</p><p className="mt-1 hidden text-xs text-white/55 sm:block">A considered concentration</p></div>
+              <div className="border-x border-white/10 p-3 sm:p-4"><Sparkles className="h-5 w-5 text-[#d9b9ad]"/><p className="mt-2 text-xs font-semibold sm:text-sm">{product.target_category || 'For every story'}</p><p className="mt-1 hidden text-xs text-white/55 sm:block">Wear it your way</p></div>
+              <div className="p-3 sm:p-4"><Leaf className="h-5 w-5 text-[#d9b9ad]"/><p className="mt-2 text-xs font-semibold sm:text-sm">{scentFamily}</p><p className="mt-1 hidden text-xs text-white/55 sm:block">Fragrance family</p></div>
+            </div>
 
             {/* Size Selection */}
             <div>
-              <h3 className="font-semibold mb-3">Select Size</h3>
-              <div className="flex flex-wrap gap-2">
+              <div className="mb-3 flex items-end justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[.2em] text-[#7d4956]">Choose your bottle</p><h3 className="mt-1 font-semibold">Select size</h3></div><span className="text-xs text-stone-500">Price updates with size</span></div>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {(activeVariants.length > 0 ? activeVariants.map((variant) => ({
                   key: variant.id,
                   label: variant.label || (variant.size_ml ? `${variant.size_ml} ml` : variant.sku),
@@ -375,13 +363,13 @@ export default function ProductDetails() {
                     key={option.key}
                     onClick={() => setSelectedSize(option.label)}
                     disabled={option.disabled}
-                    className={`px-6 py-3 border-2 rounded-lg font-semibold transition-all ${
+                    className={`min-h-16 rounded-xl border-2 px-3 py-3 text-left font-semibold transition-all ${
                       selectedSize === option.label
-                        ? 'border-blue-600 bg-blue-50 text-blue-600'
-                        : 'border-gray-300 hover:border-gray-400 disabled:cursor-not-allowed disabled:opacity-40'
+                        ? 'border-[#6f3b49] bg-[#fff8f4] text-[#5d2d3a] shadow-sm'
+                        : 'border-stone-200 bg-white hover:border-stone-400 disabled:cursor-not-allowed disabled:opacity-40'
                     }`}
                   >
-                    {option.label}{option.price != null ? ` · ₹${Number(option.price).toLocaleString()}` : ''}
+                    <span className="block text-sm">{option.label}</span>{option.price != null && <span className="mt-1 block text-xs font-medium text-stone-500">₹{Number(option.price).toLocaleString('en-IN')}</span>}
                   </button>
                 ))}
               </div>
@@ -483,8 +471,31 @@ export default function ProductDetails() {
           </div>
         </div>
 
+        {/* Fragrance Story */}
+        <section className="mt-12 overflow-hidden rounded-3xl bg-[#211c1b] text-white shadow-xl sm:mt-16" aria-labelledby="fragrance-story-title">
+          <div className="grid lg:grid-cols-[.72fr_1.28fr]">
+            <div className="border-b border-white/10 p-6 sm:p-9 lg:border-b-0 lg:border-r">
+              <p className="text-[11px] font-semibold uppercase tracking-[.24em] text-[#d9b9ad]">Inside the fragrance</p>
+              <h2 id="fragrance-story-title" className="display-serif mt-3 text-3xl font-semibold sm:text-4xl">A scent that unfolds with you.</h2>
+              <p className="mt-4 max-w-md text-sm leading-7 text-white/65">From the first impression to the final trace on skin, discover the notes and character that shape {product.name}.</p>
+              <div className="mt-7 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Clock3 className="h-5 w-5 text-[#d9b9ad]"/><p className="mt-2 text-xs text-white/50">Longevity</p><p className="mt-1 font-semibold">{product.longevity || 'All-day presence'}</p></div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-4"><Wind className="h-5 w-5 text-[#d9b9ad]"/><p className="mt-2 text-xs text-white/50">Sillage</p><p className="mt-1 font-semibold">{product.sillage || 'Considered trail'}</p></div>
+              </div>
+            </div>
+            <div className="p-6 sm:p-9">
+              {hasNotePyramid ? <div className="grid gap-4 sm:grid-cols-3">
+                <NoteChapter number="01" title="The opening" subtitle="Top notes" notes={topNotes}/>
+                <NoteChapter number="02" title="The character" subtitle="Heart notes" notes={middleNotes}/>
+                <NoteChapter number="03" title="The memory" subtitle="Base notes" notes={baseNotes}/>
+              </div> : fallbackNotes.length > 0 ? <div><p className="text-xs uppercase tracking-[.2em] text-white/50">Signature notes</p><div className="mt-5 flex flex-wrap gap-2">{fallbackNotes.map(note => <span key={note} className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm">{note}</span>)}</div></div> : <p className="text-white/60">The complete note story will be revealed soon.</p>}
+              {(product.seasons?.length > 0 || product.occasions?.length > 0) && <div className="mt-8 grid gap-5 border-t border-white/10 pt-6 sm:grid-cols-2">{product.seasons?.length > 0 && <div><p className="text-xs uppercase tracking-[.18em] text-white/45">Made for</p><p className="mt-2 text-sm text-white/80">{product.seasons.join(' · ')}</p></div>}{product.occasions?.length > 0 && <div><p className="text-xs uppercase tracking-[.18em] text-white/45">Wear it when</p><p className="mt-2 text-sm text-white/80">{product.occasions.join(' · ')}</p></div>}</div>}
+            </div>
+          </div>
+        </section>
+
         {/* Additional Details Tabs */}
-        <Card className="mt-8">
+        <Card className="mt-8 overflow-hidden border-stone-200 bg-white/80 shadow-sm" id="product-reviews">
           <CardContent className="p-3 sm:p-6">
             <Tabs defaultValue="details">
               <TabsList className="flex w-full justify-start overflow-x-auto no-scrollbar">
@@ -496,23 +507,23 @@ export default function ProductDetails() {
 
               <TabsContent value="details" className="space-y-4">
                 <div>
-                  <h3 className="font-semibold mb-2">Product Highlights</h3>
+                  <h3 className="font-semibold mb-2">Why it belongs in your ritual</h3>
                   <ul className="space-y-2 text-gray-700">
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                      <span>Premium quality material</span>
+                      <span>{concentration} crafted for a lasting, expressive wear.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                      <span>Comfortable fit for all-day wear</span>
+                      <span>{scentFamily} character with a layered fragrance journey.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                      <span>Easy to wash and maintain</span>
+                      <span>Authenticity checked and packed with care by Perfurm.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                      <span>Available in carefully selected bottle sizes</span>
+                      <span>Available in carefully selected bottle sizes, each with transparent pricing.</span>
                     </li>
                   </ul>
                 </div>
@@ -657,4 +668,13 @@ export default function ProductDetails() {
       </Dialog>
     </div>
   );
+}
+
+function NoteChapter({ number, title, subtitle, notes }) {
+  return <article className="rounded-2xl border border-white/10 bg-white/[.04] p-5">
+    <div className="flex items-center justify-between"><span className="text-xs font-semibold text-[#d9b9ad]">{number}</span><Droplets className="h-4 w-4 text-white/30"/></div>
+    <h3 className="display-serif mt-8 text-2xl">{title}</h3>
+    <p className="mt-1 text-[10px] uppercase tracking-[.18em] text-white/40">{subtitle}</p>
+    {notes.length > 0 ? <div className="mt-5 flex flex-wrap gap-2">{notes.map(note => <span key={note} className="rounded-full border border-white/15 px-3 py-1.5 text-xs text-white/80">{note}</span>)}</div> : <p className="mt-5 text-sm text-white/45">To be revealed</p>}
+  </article>;
 }
