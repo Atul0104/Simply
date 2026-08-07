@@ -22,7 +22,7 @@ const LONGEVITY = ['Light (2–4 hours)', 'Moderate (4–6 hours)', 'Long-lastin
 const SILLAGE = ['Intimate', 'Moderate', 'Strong', 'Room-filling'];
 
 const emptyForm = () => ({
-  name: '', brand: 'Perfurm', slug: '', short_description: '', description: '', category: '',
+  name: '', brand: 'RAW', slug: '', short_description: '', description: '', category: '',
   target_category: 'Unisex', fragrance_family: '', concentration: '', price: '', mrp: '', cost_price: '', sku: '',
   top_notes: '', middle_notes: '', base_notes: '', longevity: '', sillage: '', seasons: '', occasions: '',
   ingredients: '', usage_instructions: '', safety_information: '', country_of_origin: '', manufacturer_details: '',

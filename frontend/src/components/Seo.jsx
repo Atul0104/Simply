@@ -11,8 +11,8 @@ function setMeta(selector, attributes) {
 
 export default function Seo({ title, description, canonicalPath, image, type = 'website', schema, noindex = false }) {
   useEffect(() => {
-    const pageTitle = title ? `${title} | Perfurm` : 'Perfurm | Fine fragrance, thoughtfully discovered';
-    const pageDescription = description || 'Discover modern perfume, discovery sets and home fragrance selected by Perfurm.';
+    const pageTitle = title ? `${title} | RAW` : 'RAW | Fine fragrance, thoughtfully discovered';
+    const pageDescription = description || 'Discover modern perfume, discovery sets and home fragrance selected by RAW.';
     const canonical = new URL(canonicalPath || window.location.pathname, window.location.origin).toString();
     document.title = pageTitle;
     setMeta('meta[name="description"]', { name: 'description', content: pageDescription });

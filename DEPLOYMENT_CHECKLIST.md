@@ -1,5 +1,10 @@
 # Deployment checklist
 
+- [ ] `DATABASE_ENVIRONMENT` matches `APP_ENV`; staging and production use distinct Atlas databases.
+- [ ] Atlas replica-set transaction qualification passes.
+- [ ] Razorpay keys and signed webhook flow pass when online payments are enabled.
+- [ ] Payment reconciliation queue is empty or every case has an approved disposition.
+
 ## Before deployment
 
 - [ ] Approved commit passed CI, CodeQL, dependency audit and staging E2E.

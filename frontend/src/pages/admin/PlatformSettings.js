@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { ArrowLeft, Save, Settings as SettingsIcon, Percent, CreditCard, Calendar, IndianRupee, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -19,7 +20,11 @@ export default function PlatformSettings() {
     platform_fee_percentage: 2.0,
     promotion_fee_percentage: 1.0,
     gst_percentage: 18.0,
-    payment_cycle_days: 7
+    payment_cycle_days: 7,
+    gift_wrap_enabled: true,
+    gift_wrap_price: 49,
+    sticker_enabled: true,
+    sticker_price: 19
   });
 
   useEffect(() => {
@@ -125,6 +130,20 @@ export default function PlatformSettings() {
                 required
               />
               <p className="text-xs text-gray-500 mt-1">Number of days between seller payouts (e.g., 7 for weekly)</p>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>Checkout Add-ons</CardTitle><CardDescription>Control which gift options customers can select and their server-authoritative prices.</CardDescription></CardHeader>
+          <CardContent className="grid gap-5 md:grid-cols-2">
+            <div className="space-y-3 rounded-xl border p-4">
+              <div className="flex items-center justify-between gap-4"><div><Label htmlFor="gift-wrap-enabled">Premium gift wrap</Label><p className="text-xs text-gray-500">Show gift wrap during checkout</p></div><Switch id="gift-wrap-enabled" checked={Boolean(settings.gift_wrap_enabled)} onCheckedChange={gift_wrap_enabled => setSettings({ ...settings, gift_wrap_enabled })}/></div>
+              <div><Label htmlFor="gift-wrap-price">Gift wrap price (₹)</Label><Input id="gift-wrap-price" type="number" min="0" max="10000" step="0.01" disabled={!settings.gift_wrap_enabled} value={settings.gift_wrap_price ?? 0} onChange={e => setSettings({ ...settings, gift_wrap_price: Number(e.target.value) })}/></div>
+            </div>
+            <div className="space-y-3 rounded-xl border p-4">
+              <div className="flex items-center justify-between gap-4"><div><Label htmlFor="sticker-enabled">Gift sticker</Label><p className="text-xs text-gray-500">Show the RAW sticker option</p></div><Switch id="sticker-enabled" checked={Boolean(settings.sticker_enabled)} onCheckedChange={sticker_enabled => setSettings({ ...settings, sticker_enabled })}/></div>
+              <div><Label htmlFor="sticker-price">Sticker price (₹)</Label><Input id="sticker-price" type="number" min="0" max="10000" step="0.01" disabled={!settings.sticker_enabled} value={settings.sticker_price ?? 0} onChange={e => setSettings({ ...settings, sticker_price: Number(e.target.value) })}/></div>
             </div>
           </CardContent>
         </Card>

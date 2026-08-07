@@ -622,16 +622,16 @@ function HomePage() {
   const unreadNotifications = notifications.filter(n => !n.is_read).length;
 
   if (initialLoading) {
-    return <div className="min-h-screen perfurm-page"><BottleLoader label="Composing the Perfurm collection" /></div>;
+    return <div className="min-h-screen perfurm-page"><BottleLoader label="Composing the RAW collection" /></div>;
   }
 
   return (
     <div className="min-h-screen perfurm-page">
       <Seo
-        description="Discover expressive perfume, discovery sets, fragrance gifts and home scents selected by Perfurm."
+        description="Discover expressive perfume, discovery sets, fragrance gifts and home scents selected by RAW."
         canonicalPath="/"
         schema={{
-          '@context': 'https://schema.org', '@type': 'WebSite', name: 'Perfurm',
+          '@context': 'https://schema.org', '@type': 'WebSite', name: 'RAW',
           url: window.location.origin,
           potentialAction: { '@type': 'SearchAction', target: `${window.location.origin}/customer/search?q={search_term_string}`, 'query-input': 'required name=search_term_string' },
         }}
@@ -975,7 +975,7 @@ function HomePage() {
               {offers[offerIndex].media_type === 'video' ? <video src={offers[offerIndex].image} className="h-full w-full object-cover" autoPlay muted loop playsInline preload="metadata" aria-label={offers[offerIndex].title} /> : <img src={offers[offerIndex].image} alt="" className="w-full h-full object-cover" />}
               <div className="absolute inset-0 bg-gradient-to-r from-stone-950/80 via-stone-950/45 to-transparent flex items-center">
                 <div className="px-7 sm:px-14 lg:px-20 py-6 text-white max-w-2xl">
-                  <p className="text-xs uppercase tracking-[0.28em] mb-3 text-stone-200">Perfurm · Olfactory stories</p>
+                  <p className="text-xs uppercase tracking-[0.28em] mb-3 text-stone-200">RAW · Olfactory stories</p>
                   <h2 className="display-serif text-4xl sm:text-5xl lg:text-[64px] leading-[0.98] font-semibold mb-5">{offers[offerIndex].title}</h2>
                   <p className="mb-6 text-sm sm:text-lg text-stone-200 max-w-lg leading-relaxed">{offers[offerIndex].subtitle}</p>
                   <Button onClick={() => navigate(offers[offerIndex].link)} className="bg-[#fffdf9] text-stone-900 hover:bg-white rounded-full px-7 h-11">
@@ -1052,7 +1052,7 @@ function HomePage() {
               <Crown className="h-7 w-7 text-[#d4ae72]" />
               <p className="mt-7 text-[10px] font-semibold uppercase tracking-[.32em] text-[#d4ae72]">The house signatures</p>
               <h2 className="display-serif mt-3 text-4xl leading-[1.02] sm:text-5xl">The signatures<br/>of our house.</h2>
-              <p className="mt-5 max-w-md text-sm leading-7 text-stone-300">Meet the fragrances that define the Perfurm house—from luminous freshness to a deep after-dark trail. Choose the character that feels unmistakably yours.</p>
+              <p className="mt-5 max-w-md text-sm leading-7 text-stone-300">Meet the fragrances that define the RAW house—from luminous freshness to a deep after-dark trail. Choose the character that feels unmistakably yours.</p>
               <Button onClick={() => navigate('/customer/category/all')} variant="outline" className="mt-7 w-fit rounded-full border-white/30 bg-transparent px-6 text-white hover:bg-white hover:text-stone-950">Discover the collection <ArrowUpRight className="ml-2 h-4 w-4"/></Button>
             </div>
             <div className="grid grid-cols-2">
@@ -1146,7 +1146,7 @@ function HomePage() {
         )}
 
         <motion.section initial={{ opacity: 0 }} whileInView={{ opacity: 1 }} viewport={{ once: true }} className="order-[60] mb-12 overflow-hidden bg-[#2b2422] p-5 text-white sm:mb-16 sm:p-8">
-          <div className="mb-5 flex items-end justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[0.3em] text-[#d3aaa3]">The Perfurm edit</p><h2 className="display-serif mt-2 text-3xl sm:text-4xl">Stories selected by the house.</h2></div><p className="hidden max-w-sm text-right text-sm text-stone-400 sm:block">Ordered and updated from Hero &amp; Edit Management.</p></div>
+          <div className="mb-5 flex items-end justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[0.3em] text-[#d3aaa3]">The RAW edit</p><h2 className="display-serif mt-2 text-3xl sm:text-4xl">Stories selected by the house.</h2></div><p className="hidden max-w-sm text-right text-sm text-stone-400 sm:block">Ordered and updated from Hero &amp; Edit Management.</p></div>
           <div className="flex snap-x gap-4 overflow-x-auto pb-3 no-scrollbar">
             {offers.slice(0, 6).map((story, index) => <article key={`${story.title}-${index}`} className="group relative min-h-[360px] min-w-[88%] snap-start overflow-hidden text-left sm:min-w-[480px] lg:min-h-[420px] lg:min-w-[560px]">
               {story.media_type === 'video' ? <video src={story.image} className="absolute inset-0 h-full w-full object-cover" autoPlay muted loop playsInline preload="metadata" /> : <img src={story.image} alt="" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />}
@@ -1383,7 +1383,7 @@ function HomePage() {
             </div>
           </div>
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2026 Perfurm. All rights reserved.</p>
+            <p>&copy; 2026 RAW. All rights reserved.</p>
           </div>
         </div>
       </footer>}
@@ -1503,7 +1503,7 @@ function OffersPage() {
   };
   if (loading) return <div className="min-h-screen perfurm-page"><BottleLoader label="Preparing your offers" /></div>;
   return <div className="min-h-screen bg-[#f8f5f1]">
-    <header className="sticky top-0 z-40 border-b border-stone-200 bg-[#fffdf9]/95 backdrop-blur"><div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-3 sm:px-6"><Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back"><ChevronLeft /></Button><div><p className="text-[10px] uppercase tracking-[0.2em] text-[#7d4956]">Perfurm privileges</p><h1 className="display-serif text-2xl font-semibold">Offers</h1></div></div></header>
+    <header className="sticky top-0 z-40 border-b border-stone-200 bg-[#fffdf9]/95 backdrop-blur"><div className="mx-auto flex max-w-6xl items-center gap-3 px-3 py-3 sm:px-6"><Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back"><ChevronLeft /></Button><div><p className="text-[10px] uppercase tracking-[0.2em] text-[#7d4956]">RAW privileges</p><h1 className="display-serif text-2xl font-semibold">Offers</h1></div></div></header>
     <main className="mx-auto max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
       <section className="mb-8 overflow-hidden rounded-2xl bg-[#5c3340] px-6 py-8 text-white sm:px-10"><p className="text-xs uppercase tracking-[0.18em] text-white/65">Made for your next discovery</p><h2 className="display-serif mt-2 text-3xl sm:text-5xl">A little more reason to linger.</h2><p className="mt-3 max-w-2xl text-sm text-white/75">Copy an available code and apply it securely during checkout.</p></section>
       <section aria-labelledby="coupon-page-title"><h2 id="coupon-page-title" className="display-serif mb-4 text-2xl font-semibold">Coupon codes</h2><div className="grid gap-4 md:grid-cols-2">{data.coupons.map(coupon => <article key={coupon.id} className="rounded-2xl border border-[#6f3b49]/15 bg-white p-5 shadow-sm"><div className="flex justify-between gap-3"><div><Badge className="bg-[#6f3b49]">{coupon.discount_type === 'percentage' ? `${coupon.discount_value}% OFF` : `₹${coupon.discount_value} OFF`}</Badge><h3 className="display-serif mt-3 text-xl font-semibold">{coupon.code === 'WELCOME10' ? 'Your Perfurm welcome' : 'A signature-scent saving'}</h3><p className="mt-1 text-sm text-stone-500">Minimum order ₹{coupon.min_order_amount}{coupon.max_discount ? ` · up to ₹${coupon.max_discount}` : ''}</p></div><Gift className="h-7 w-7 text-[#7d4956]" /></div><div className="mt-5 flex flex-wrap gap-2"><Button variant="outline" className="rounded-full border-dashed font-mono" onClick={() => copyCode(coupon.code)}>{copied === coupon.code ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}{copied === coupon.code ? 'Copied' : coupon.code}</Button><Button className="rounded-full" onClick={() => navigate(user ? '/customer/category/all' : '/auth')}>{user ? 'Shop offer' : 'Login to redeem'}</Button></div></article>)}</div></section>

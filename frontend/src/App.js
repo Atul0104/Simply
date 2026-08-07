@@ -25,7 +25,7 @@ function AppRoutes() {
   const { user } = useAuth();
   return (
     <div id="main-content" tabIndex="-1" className="outline-none">
-      <Suspense fallback={<BottleLoader label="Preparing Perfurm" />}>
+      <Suspense fallback={<BottleLoader label="Preparing RAW" />}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/cookie-policy" element={<PolicyPage />} />

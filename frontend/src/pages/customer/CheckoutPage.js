@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { ArrowLeft, CheckCircle, MapPin, Plus, Home, Briefcase, Truck, CreditCard, Wallet, Tag, Check, X, AlertCircle, Smartphone, Building, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -65,6 +66,8 @@ export default function CheckoutPage() {
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [couponApplied, setCouponApplied] = useState(null);
   const [availableCoupons, setAvailableCoupons] = useState([]);
+  const [giftWrapSelected, setGiftWrapSelected] = useState(false);
+  const [stickerSelected, setStickerSelected] = useState(false);
 
   const cart = JSON.parse(localStorage.getItem('cart') || '[]');
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -249,6 +252,7 @@ export default function CheckoutPage() {
       const response = await axios.post(`${API_URL}/checkout/quote`, {
         items: cart.map(({ product_id, variant_id, size, color, quantity }) => ({ product_id, variant_id, size, color, quantity })),
         pincode: address.pincode, state: address.state, coupon_code: code || null,
+        gift_wrap_selected: giftWrapSelected, sticker_selected: stickerSelected,
       });
       setAddressErrors({});
       setQuote(response.data); setCouponDiscount(response.data.discount_amount || 0);
@@ -261,7 +265,7 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (selectedAddressId && savedAddresses.length) fetchQuote(couponApplied?.code).catch(() => {});
-  }, [selectedAddressId, savedAddresses.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedAddressId, savedAddresses.length, giftWrapSelected, stickerSelected]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const createOrder = async () => {
     const selectedAddress = getSelectedAddress();
@@ -271,6 +275,8 @@ export default function CheckoutPage() {
       total_amount: total,
       payment_method: paymentMethod === 'cod' ? 'cod' : 'online',
       coupon_code: couponApplied?.code || null,
+      gift_wrap_selected: giftWrapSelected,
+      sticker_selected: stickerSelected,
       shipping_address: {
         name: selectedAddress.name,
         phone: selectedAddress.phone,
@@ -326,7 +332,7 @@ export default function CheckoutPage() {
         key: key_id,
         amount: amount,
         currency: "INR",
-        name: "Perfurm",
+        name: "RAW",
         description: `Order #${order.id}`,
         order_id: razorpay_order_id,
         handler: async function (response) {
@@ -716,6 +722,22 @@ export default function CheckoutPage() {
                     </div>
                   ))}
                 </div>
+
+                {(quote?.checkout_addons?.gift_wrap?.enabled || quote?.checkout_addons?.sticker?.enabled) && (
+                  <div className="space-y-3 border-t pt-4">
+                    <div><p className="font-medium">Make it special</p><p className="text-xs text-stone-500">Optional finishing touches, priced securely by RAW.</p></div>
+                    {quote?.checkout_addons?.gift_wrap?.enabled && <label htmlFor="gift-wrap" className="flex cursor-pointer items-start gap-3 rounded-xl border p-3 hover:bg-[#fff8f4]">
+                      <Checkbox id="gift-wrap" checked={giftWrapSelected} onCheckedChange={value => setGiftWrapSelected(Boolean(value))} />
+                      <span className="flex-1"><span className="block font-medium">Premium gift wrap</span><span className="text-xs text-stone-500">Elegantly wrapped and ready to gift</span></span>
+                      <span className="font-semibold">₹{Number(quote.checkout_addons.gift_wrap.price).toFixed(0)}</span>
+                    </label>}
+                    {quote?.checkout_addons?.sticker?.enabled && <label htmlFor="gift-sticker" className="flex cursor-pointer items-start gap-3 rounded-xl border p-3 hover:bg-[#fff8f4]">
+                      <Checkbox id="gift-sticker" checked={stickerSelected} onCheckedChange={value => setStickerSelected(Boolean(value))} />
+                      <span className="flex-1"><span className="block font-medium">RAW gift sticker</span><span className="text-xs text-stone-500">Add a signature finishing sticker</span></span>
+                      <span className="font-semibold">₹{Number(quote.checkout_addons.sticker.price).toFixed(0)}</span>
+                    </label>}
+                  </div>
+                )}
                 
                 {/* Coupon */}
                 <div className="border-t pt-4">
@@ -760,6 +782,8 @@ export default function CheckoutPage() {
                       {shipping === 0 ? 'FREE' : `₹${shipping}`}
                     </span>
                   </div>
+                  {Number(quote?.gift_wrap_charge || 0) > 0 && <div className="flex justify-between"><span>Gift wrap</span><span>₹{Number(quote.gift_wrap_charge).toFixed(0)}</span></div>}
+                  {Number(quote?.sticker_charge || 0) > 0 && <div className="flex justify-between"><span>Gift sticker</span><span>₹{Number(quote.sticker_charge).toFixed(0)}</span></div>}
                   <div className="flex justify-between text-gray-600">
                     <span>GST ({quote?.tax_percentage || 0}%{quote?.tax_inclusive ? ', included' : ''})</span>
                     <span>₹{gstAmount.toFixed(0)}</span>

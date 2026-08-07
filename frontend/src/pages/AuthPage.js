@@ -318,7 +318,7 @@ export default function AuthPage() {
         <Card className="order-1 md:order-2 shadow-2xl overflow-hidden">
           <CardHeader className="text-center">
             <CardTitle as="h1" className="text-2xl bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Welcome to Perfurm
+              Welcome to RAW
             </CardTitle>
             <CardDescription>Sign in to your account or create new one</CardDescription>
           </CardHeader>

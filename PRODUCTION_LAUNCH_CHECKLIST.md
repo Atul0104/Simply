@@ -1,5 +1,10 @@
 # Production launch checklist
 
+- [ ] Real Atlas transaction abort/commit evidence recorded.
+- [ ] Razorpay test-mode order, signed/delayed webhook and full/partial refund evidence recorded.
+- [ ] Payment reconciliation runbook rehearsed by engineering and finance.
+- [ ] Backup restore and product/variant/inventory counts reconciled.
+
 ## Critical approval
 
 - [ ] Atlas replica set, indexes, transactions, backup and restore drill proven.

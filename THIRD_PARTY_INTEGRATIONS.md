@@ -1,5 +1,7 @@
 # Third-party integrations
 
+Set `DATABASE_ENVIRONMENT` equal to `APP_ENV`; a stored database identity prevents staging and production sharing a database. Set `ONLINE_PAYMENTS_ENABLED=true` only with all three Razorpay variables. Only the key ID reaches checkout; secrets and raw provider errors remain backend-only.
+
 | Provider | Purpose | Cost | Current state | Required configuration |
 |---|---|---:|---|---|
 | MongoDB Atlas | transactional data | Free with limits | adapter implemented; staging proof required | `MONGO_URL`, `DB_NAME` |

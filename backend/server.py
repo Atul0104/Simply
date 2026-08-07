@@ -45,11 +45,13 @@ APP_ENV = os.environ.get("APP_ENV", "development").lower()
 PUBLIC_SITE_URL = os.environ.get("PUBLIC_SITE_URL", "http://localhost:3000").rstrip("/")
 PUBLIC_API_URL = os.environ.get("PUBLIC_API_URL", "http://localhost:8000").rstrip("/")
 PAYMENT_RESERVATION_MINUTES = int(os.environ.get("PAYMENT_RESERVATION_MINUTES", "20"))
+DATABASE_ENVIRONMENT = os.environ.get("DATABASE_ENVIRONMENT", "development").lower()
+ONLINE_PAYMENTS_ENABLED = os.environ.get("ONLINE_PAYMENTS_ENABLED", "false").lower() == "true"
 ACCOUNT_DELETION_GRACE_DAYS = int(os.environ.get("ACCOUNT_DELETION_GRACE_DAYS", "30"))
 ORDER_PII_RETENTION_DAYS = int(os.environ.get("ORDER_PII_RETENTION_DAYS", "2555"))
 TAX_PRICES_INCLUDE_GST = os.environ.get("TAX_PRICES_INCLUDE_GST", "true").lower() == "true"
 TAX_ORIGIN_STATE = os.environ.get("TAX_ORIGIN_STATE", "Maharashtra").strip()
-BUSINESS_LEGAL_NAME = os.environ.get("BUSINESS_LEGAL_NAME", "Perfurm Commerce")
+BUSINESS_LEGAL_NAME = os.environ.get("BUSINESS_LEGAL_NAME", "RAW Fragrance Commerce")
 BUSINESS_GSTIN = os.environ.get("BUSINESS_GSTIN", "")
 BUSINESS_ADDRESS = os.environ.get("BUSINESS_ADDRESS", "")
 NOTIFICATION_DELIVERY_ENABLED = os.environ.get("NOTIFICATION_DELIVERY_ENABLED", "false").lower() == "true"
@@ -87,6 +89,12 @@ request_metrics: Dict[str, Any] = {
 }
 if APP_ENV in {"staging", "production"} and USE_MOCK_DB:
     raise RuntimeError("USE_MOCK_DB must be false outside development and test")
+if APP_ENV in {"staging", "production"} and DATABASE_ENVIRONMENT != APP_ENV:
+    raise RuntimeError("DATABASE_ENVIRONMENT must match APP_ENV outside development")
+if ONLINE_PAYMENTS_ENABLED and not all(os.environ.get(name) for name in (
+    "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"
+)):
+    raise RuntimeError("Online payments are enabled but Razorpay configuration is incomplete")
 
 if USE_MOCK_DB:
     from mongomock_motor import AsyncMongoMockClient
@@ -140,7 +148,7 @@ if os.environ.get('RAZORPAY_KEY_ID') and os.environ.get('RAZORPAY_KEY_SECRET'):
 
 # Create the main app
 app = FastAPI(
-    title="Perfurm Commerce API",
+    title="RAW Commerce API",
     docs_url=None if APP_ENV == "production" else "/docs",
     redoc_url=None if APP_ENV == "production" else "/redoc",
 )
@@ -338,7 +346,7 @@ class Product(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     seller_id: str
     name: str
-    brand: str = "Perfurm"
+    brand: str = "RAW"
     slug: Optional[str] = None
     short_description: Optional[str] = None
     description: str
@@ -390,7 +398,7 @@ class Product(BaseModel):
 
 class ProductCreate(BaseModel):
     name: str
-    brand: str = "Perfurm"
+    brand: str = "RAW"
     slug: Optional[str] = None
     short_description: Optional[str] = None
     description: str
@@ -483,6 +491,10 @@ class Order(BaseModel):
     total_amount: float
     subtotal: float = 0
     shipping_charge: float = 0
+    gift_wrap_selected: bool = False
+    gift_wrap_charge: float = 0
+    sticker_selected: bool = False
+    sticker_charge: float = 0
     discount_amount: float = 0
     taxable_amount: float = 0
     tax_percentage: float = 0
@@ -499,6 +511,12 @@ class Order(BaseModel):
     payment_status: str = "pending"
     payment_method: str = "cod"
     reservation_status: str = "finalized"
+    reservation_expires_at: Optional[datetime] = None
+    reservation_committed_at: Optional[datetime] = None
+    reservation_released_at: Optional[datetime] = None
+    reservation_release_reason: Optional[str] = None
+    reconciliation_state: Optional[str] = None
+    reconciliation_required_at: Optional[datetime] = None
     idempotency_key: Optional[str] = None
     status_history: List[Dict[str, Any]] = Field(default_factory=list)
     shipping_address: Dict[str, str]
@@ -523,12 +541,16 @@ class OrderCreate(BaseModel):
     shipping_address: Dict[str, str]
     payment_method: Literal["cod", "online"] = "cod"
     coupon_code: Optional[str] = Field(default=None, max_length=40)
+    gift_wrap_selected: bool = False
+    sticker_selected: bool = False
 
 class CheckoutQuoteRequest(BaseModel):
     items: List[Dict[str, Any]] = Field(min_length=1, max_length=100)
     pincode: str = Field(pattern=r"^[1-9]\d{5}$")
     state: str = Field(min_length=2, max_length=100)
     coupon_code: Optional[str] = Field(default=None, max_length=40)
+    gift_wrap_selected: bool = False
+    sticker_selected: bool = False
 
 class Review(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1149,6 +1171,10 @@ class PlatformSettings(BaseModel):
     promotion_fee_percentage: float = 1.0
     gst_percentage: float = 18.0
     payment_cycle_days: int = 7  # Weekly payment to sellers
+    gift_wrap_enabled: bool = True
+    gift_wrap_price: float = 49.0
+    sticker_enabled: bool = True
+    sticker_price: float = 19.0
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PlatformSettingsUpdate(BaseModel):
@@ -1156,6 +1182,10 @@ class PlatformSettingsUpdate(BaseModel):
     promotion_fee_percentage: Optional[float] = Field(default=None, ge=0, le=100)
     gst_percentage: Optional[float] = Field(default=None, ge=0, le=100)
     payment_cycle_days: Optional[int] = Field(default=None, ge=1, le=365)
+    gift_wrap_enabled: Optional[bool] = None
+    gift_wrap_price: Optional[float] = Field(default=None, ge=0, le=10000)
+    sticker_enabled: Optional[bool] = None
+    sticker_price: Optional[float] = Field(default=None, ge=0, le=10000)
 
 # ============== SELLER PAYOUT MODELS ==============
 class SellerPayout(BaseModel):
@@ -1778,9 +1808,9 @@ async def send_otp(payload: OtpRequest, http_request: Request):
     await save_auth_challenge(f"login:{privacy_key(identifier)}", otp)
 
     if payload.method == "email" and notification_channel_configured("email"):
-        await asyncio.to_thread(send_email_job, {"recipient": identifier, "title": "Your Perfurm login code", "message": f"Your one-time login code is {otp}. It expires in 10 minutes."})
+        await asyncio.to_thread(send_email_job, {"recipient": identifier, "title": "Your RAW login code", "message": f"Your one-time login code is {otp}. It expires in 10 minutes."})
     elif payload.method in {"sms", "whatsapp"} and notification_channel_configured("sms"):
-        await asyncio.to_thread(send_sms_job, {"recipient": identifier, "title": "Perfurm login code", "message": f"Your code is {otp}. It expires in 10 minutes."})
+        await asyncio.to_thread(send_sms_job, {"recipient": identifier, "title": "RAW login code", "message": f"Your code is {otp}. It expires in 10 minutes."})
     elif not ENABLE_DEMO_OTP and APP_ENV in {"staging", "production"}:
         raise HTTPException(status_code=503, detail=f"{payload.method.title()} OTP delivery is not configured")
     
@@ -2625,7 +2655,7 @@ async def _finalize_order_inventory(order: Dict[str, Any], session: Any = None) 
         **session_kwargs,
     )
     if claim.modified_count != 1:
-        return
+        raise HTTPException(status_code=409, detail="Inventory reservation is no longer available")
     for item in order.get("items", []):
         if item.get("inventory_kind") == "variant":
             result = await db.variant_inventory.update_one(
@@ -2649,7 +2679,7 @@ async def _finalize_order_inventory(order: Dict[str, Any], session: Any = None) 
             )
     await db.orders.update_one(
         {"id": order["id"], "reservation_status": "finalizing"},
-        {"$set": {"reservation_status": "finalized", "inventory_finalized_at": datetime.now(timezone.utc)}},
+        {"$set": {"reservation_status": "finalized", "inventory_finalized_at": datetime.now(timezone.utc), "reservation_committed_at": datetime.now(timezone.utc)}},
         **session_kwargs,
     )
 
@@ -2686,23 +2716,53 @@ async def _release_order_coupon(order: Dict[str, Any], session: Any = None) -> N
 
 async def mark_order_paid_and_finalize(
     order: Dict[str, Any], match: Dict[str, Any], payment_update: Dict[str, Any],
-) -> bool:
-    async def execute(session: Any = None) -> bool:
+) -> str:
+    """Commit a captured payment and its stock exactly once.
+
+    A provider capture received after reservation release is durable financial
+    evidence, but it must never confirm an order whose inventory is no longer
+    guaranteed. Such captures enter the reconciliation queue instead.
+    """
+    async def execute(session: Any = None) -> str:
         session_kwargs = {"session": session} if session is not None else {}
+        current = await db.orders.find_one({"id": order["id"]}, **session_kwargs)
+        if not current or current.get("payment_status") == "paid":
+            return "duplicate"
+        if current.get("reservation_status") != "reserved":
+            reconciliation_update = {
+                "$set": {
+                    **payment_update.get("$set", {}),
+                    "payment_status": "captured_reconciliation_required",
+                    "status": OrderStatus.PAYMENT_PENDING.value,
+                    "reconciliation_state": "captured_inventory_unavailable",
+                    "reconciliation_required_at": datetime.now(timezone.utc),
+                },
+                "$push": payment_update.get("$push", {}),
+            }
+            await db.orders.update_one(match, reconciliation_update, **session_kwargs)
+            return "reconciliation_required"
         result = await db.orders.update_one(match, payment_update, **session_kwargs)
         if result.modified_count == 1:
-            await _finalize_order_inventory(order, session=session)
-            return True
-        return False
+            await _finalize_order_inventory(current, session=session)
+            await db.orders.update_one({"id": order["id"]}, {"$set": {"reconciliation_state": "matched"}}, **session_kwargs)
+            return "committed"
+        return "duplicate"
 
     if USE_MOCK_DB:
-        return await execute()
+        try:
+            return await execute()
+        except Exception:
+            await db.orders.update_one(
+                {"id": order["id"]},
+                {"$set": {"payment_status": "captured_reconciliation_required", "status": OrderStatus.PAYMENT_PENDING.value, "reconciliation_state": "inventory_commit_failed", "reconciliation_required_at": datetime.now(timezone.utc)}},
+            )
+            raise
     async with await client.start_session() as mongo_session:
         async with mongo_session.start_transaction():
             return await execute(mongo_session)
 
 
-async def _release_order_inventory(order: Dict[str, Any], session: Any = None) -> None:
+async def _release_order_inventory(order: Dict[str, Any], session: Any = None, reason: str = "Order cancelled") -> None:
     session_kwargs = {"session": session} if session is not None else {}
     original_status = order.get("reservation_status", "finalized")
     if original_status not in {"reserved", "finalized"}:
@@ -2749,7 +2809,7 @@ async def _release_order_inventory(order: Dict[str, Any], session: Any = None) -
             )
     await db.orders.update_one(
         {"id": order["id"], "reservation_status": "releasing"},
-        {"$set": {"reservation_status": "released", "inventory_released_at": datetime.now(timezone.utc)}},
+        {"$set": {"reservation_status": "released", "inventory_released_at": datetime.now(timezone.utc), "reservation_released_at": datetime.now(timezone.utc), "reservation_release_reason": reason}},
         **session_kwargs,
     )
     await _release_order_coupon(order, session=session)
@@ -2764,14 +2824,14 @@ async def release_order_inventory(order: Dict[str, Any]) -> None:
             await _release_order_inventory(order, session=mongo_session)
 
 
-async def mark_order_failed_and_release(order: Dict[str, Any], payment_update: Dict[str, Any]) -> bool:
+async def mark_order_failed_and_release(order: Dict[str, Any], payment_update: Dict[str, Any], reason: str = "Payment failed") -> bool:
     async def execute(session: Any = None) -> bool:
         session_kwargs = {"session": session} if session is not None else {}
         result = await db.orders.update_one(
             {"id": order["id"], "payment_status": {"$ne": "paid"}}, payment_update, **session_kwargs,
         )
         if result.modified_count == 1:
-            await _release_order_inventory(order, session=session)
+            await _release_order_inventory(order, session=session, reason=reason)
             return True
         return False
 
@@ -2783,12 +2843,16 @@ async def mark_order_failed_and_release(order: Dict[str, Any], payment_update: D
 
 
 async def expire_stale_payment_reservations(limit: int = 100) -> int:
+    now = datetime.now(timezone.utc)
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=PAYMENT_RESERVATION_MINUTES)
     orders = await db.orders.find(
         {
             "reservation_status": "reserved",
             "payment_status": {"$in": ["pending", "payment_order_created"]},
-            "created_at": {"$lte": cutoff},
+            "$or": [
+                {"reservation_expires_at": {"$lte": now}},
+                {"reservation_expires_at": None, "created_at": {"$lte": cutoff}},
+            ],
         },
         {"_id": 0},
     ).sort("created_at", 1).limit(limit).to_list(limit)
@@ -2801,7 +2865,7 @@ async def expire_stale_payment_reservations(limit: int = 100) -> int:
                 "payment_history": {"status": "expired", "at": now, "source": "reservation_reaper"},
                 "status_history": {"status": OrderStatus.PAYMENT_FAILED.value, "at": now, "source": "reservation_reaper"},
             },
-        })
+        }, reason="Reservation expired")
         expired += int(updated)
     return expired
 
@@ -3022,7 +3086,10 @@ async def resolve_checkout_coupon(code: str, subtotal: float, customer_id: str) 
     return coupon, calculate_coupon_discount(coupon, subtotal)
 
 
-async def build_checkout_quote(items: List[Dict[str, Any]], pincode: str, state: str, coupon_code: Optional[str], customer_id: str) -> Dict[str, Any]:
+async def build_checkout_quote(
+    items: List[Dict[str, Any]], pincode: str, state: str, coupon_code: Optional[str], customer_id: str,
+    gift_wrap_selected: bool = False, sticker_selected: bool = False,
+) -> Dict[str, Any]:
     if not items:
         raise HTTPException(status_code=400, detail="Order must contain at least one item")
     if not re.fullmatch(r"\d{6}", str(pincode)):
@@ -3073,6 +3140,10 @@ async def build_checkout_quote(items: List[Dict[str, Any]], pincode: str, state:
     if coupon_code: coupon, discount_amount = await resolve_checkout_coupon(coupon_code, subtotal, customer_id)
     taxable_amount = round(max(subtotal - discount_amount, 0), 2)
     platform_settings = await db.platform_settings.find_one({"id": "platform_settings"}, {"_id": 0}) or PlatformSettings().model_dump()
+    gift_wrap_available = bool(platform_settings.get("gift_wrap_enabled", True))
+    sticker_available = bool(platform_settings.get("sticker_enabled", True))
+    gift_wrap_charge = round(float(platform_settings.get("gift_wrap_price", 49.0)), 2) if gift_wrap_selected and gift_wrap_available else 0.0
+    sticker_charge = round(float(platform_settings.get("sticker_price", 19.0)), 2) if sticker_selected and sticker_available else 0.0
     tax_percentage = float(platform_settings.get("gst_percentage", 18.0))
     tax_amount = round(taxable_amount * tax_percentage / (100 + tax_percentage), 2) if TAX_PRICES_INCLUDE_GST and tax_percentage else round(taxable_amount * tax_percentage / 100, 2)
     intra_state = state.strip().casefold() == TAX_ORIGIN_STATE.casefold()
@@ -3080,15 +3151,15 @@ async def build_checkout_quote(items: List[Dict[str, Any]], pincode: str, state:
     sgst_amount = round(tax_amount - cgst_amount, 2) if intra_state else 0.0
     igst_amount = tax_amount if not intra_state else 0.0
     shipping_charge = round(float(serviceability.get("delivery_charge", 0)), 2)
-    total_amount = round(taxable_amount + shipping_charge + (0 if TAX_PRICES_INCLUDE_GST else tax_amount), 2)
-    return {"items": canonical_items, "subtotal": subtotal, "discount_amount": discount_amount, "taxable_amount": taxable_amount, "tax_percentage": tax_percentage, "tax_amount": tax_amount, "tax_inclusive": TAX_PRICES_INCLUDE_GST, "cgst_amount": cgst_amount, "sgst_amount": sgst_amount, "igst_amount": igst_amount, "shipping_charge": shipping_charge, "total_amount": total_amount, "coupon": coupon, "delivery": {"estimated_delivery_days": serviceability.get("delivery_days"), "cod_available": serviceability.get("cod_available", False)}}
+    total_amount = round(taxable_amount + shipping_charge + gift_wrap_charge + sticker_charge + (0 if TAX_PRICES_INCLUDE_GST else tax_amount), 2)
+    return {"items": canonical_items, "subtotal": subtotal, "discount_amount": discount_amount, "taxable_amount": taxable_amount, "tax_percentage": tax_percentage, "tax_amount": tax_amount, "tax_inclusive": TAX_PRICES_INCLUDE_GST, "cgst_amount": cgst_amount, "sgst_amount": sgst_amount, "igst_amount": igst_amount, "shipping_charge": shipping_charge, "gift_wrap_selected": bool(gift_wrap_selected and gift_wrap_available), "gift_wrap_charge": gift_wrap_charge, "sticker_selected": bool(sticker_selected and sticker_available), "sticker_charge": sticker_charge, "checkout_addons": {"gift_wrap": {"enabled": gift_wrap_available, "price": round(float(platform_settings.get("gift_wrap_price", 49.0)), 2)}, "sticker": {"enabled": sticker_available, "price": round(float(platform_settings.get("sticker_price", 19.0)), 2)}}, "total_amount": total_amount, "coupon": coupon, "delivery": {"estimated_delivery_days": serviceability.get("delivery_days"), "cod_available": serviceability.get("cod_available", False)}}
 
 
 @api_router.post("/checkout/quote")
 async def quote_checkout(payload: CheckoutQuoteRequest, user: Dict[str, Any] = Depends(require_role([UserRole.CUSTOMER]))):
     if user.get("deletion_pending"):
         raise HTTPException(status_code=409, detail="Checkout is unavailable while account deletion is approved")
-    quote = await build_checkout_quote(payload.items, payload.pincode, payload.state, payload.coupon_code, user["id"])
+    quote = await build_checkout_quote(payload.items, payload.pincode, payload.state, payload.coupon_code, user["id"], payload.gift_wrap_selected, payload.sticker_selected)
     return {key: value for key, value in quote.items() if key != "coupon"}
 
 
@@ -3114,6 +3185,7 @@ async def create_order(
     quote = await build_checkout_quote(
         order_data.items, str(order_data.shipping_address.get("pincode", "")),
         str(order_data.shipping_address.get("state", "")), order_data.coupon_code, user["id"],
+        order_data.gift_wrap_selected, order_data.sticker_selected,
     )
     canonical_items = quote["items"]
     subtotal, discount_amount = quote["subtotal"], quote["discount_amount"]
@@ -3128,6 +3200,8 @@ async def create_order(
         payment_status="cod_pending" if order_data.payment_method == "cod" else "pending",
         payment_method=order_data.payment_method,
         reservation_status="finalized" if order_data.payment_method == "cod" else "reserved",
+        reservation_expires_at=(datetime.now(timezone.utc) + timedelta(minutes=PAYMENT_RESERVATION_MINUTES)) if order_data.payment_method == "online" else None,
+        reservation_committed_at=datetime.now(timezone.utc) if order_data.payment_method == "cod" else None,
         idempotency_key=idempotency_key,
         status_history=[{
             "status": OrderStatus.CONFIRMED.value if order_data.payment_method == "cod" else OrderStatus.PENDING.value,
@@ -3141,6 +3215,10 @@ async def create_order(
         items=canonical_items,
         subtotal=subtotal,
         shipping_charge=shipping_charge,
+        gift_wrap_selected=quote["gift_wrap_selected"],
+        gift_wrap_charge=quote["gift_wrap_charge"],
+        sticker_selected=quote["sticker_selected"],
+        sticker_charge=quote["sticker_charge"],
         discount_amount=discount_amount,
         taxable_amount=taxable_amount,
         tax_percentage=tax_percentage,
@@ -3287,7 +3365,7 @@ async def generate_order_invoices(order: Dict[str, Any]) -> List[Dict[str, Any]]
     now, financial_year = datetime.now(timezone.utc), indian_financial_year(datetime.now(timezone.utc))
     invoices = []
     subtotal = float(order.get("subtotal", 0)) or 1
-    allocated_discount = allocated_shipping = allocated_tax = 0.0
+    allocated_discount = allocated_shipping = allocated_tax = allocated_gift_wrap = allocated_sticker = 0.0
     for index, seller_id in enumerate(seller_ids):
         seller, lines = sellers_by_id.get(seller_id), groups[seller_id]
         if not seller: raise HTTPException(status_code=409, detail="Seller record required for invoice")
@@ -3297,8 +3375,10 @@ async def generate_order_invoices(order: Dict[str, Any]) -> List[Dict[str, Any]]
         last = index == len(seller_ids) - 1
         discount = round(float(order.get("discount_amount", 0)) - allocated_discount, 2) if last else round(float(order.get("discount_amount", 0)) * gross / subtotal, 2)
         shipping = round(float(order.get("shipping_charge", 0)) - allocated_shipping, 2) if last else round(float(order.get("shipping_charge", 0)) * gross / subtotal, 2)
+        gift_wrap = round(float(order.get("gift_wrap_charge", 0)) - allocated_gift_wrap, 2) if last else round(float(order.get("gift_wrap_charge", 0)) * gross / subtotal, 2)
+        sticker = round(float(order.get("sticker_charge", 0)) - allocated_sticker, 2) if last else round(float(order.get("sticker_charge", 0)) * gross / subtotal, 2)
         tax = round(float(order.get("tax_amount", 0)) - allocated_tax, 2) if last else round(float(order.get("tax_amount", 0)) * gross / subtotal, 2)
-        allocated_discount += discount; allocated_shipping += shipping; allocated_tax += tax
+        allocated_discount += discount; allocated_shipping += shipping; allocated_tax += tax; allocated_gift_wrap += gift_wrap; allocated_sticker += sticker
         net_items = round(max(gross - discount, 0), 2)
         # GST invoices show the pre-tax assessable value even when storefront
         # prices are tax-inclusive. The customer-facing order total remains net.
@@ -3315,7 +3395,9 @@ async def generate_order_invoices(order: Dict[str, Any]) -> List[Dict[str, Any]]
             "tax_percentage": float(order.get("tax_percentage", 0)), "tax_amount": tax,
             "tax_inclusive": bool(order.get("tax_inclusive", True)),
             "cgst_amount": round(tax / 2, 2) if intra else 0, "sgst_amount": round(tax - round(tax / 2, 2), 2) if intra else 0, "igst_amount": tax if not intra else 0,
-            "shipping_charge": shipping, "total_amount": round(taxable + tax + shipping, 2),
+            "shipping_charge": shipping, "gift_wrap_charge": gift_wrap, "sticker_charge": sticker,
+            "gift_wrap_selected": bool(order.get("gift_wrap_selected")), "sticker_selected": bool(order.get("sticker_selected")),
+            "total_amount": round(taxable + tax + shipping + gift_wrap + sticker, 2),
             "payment_method": order.get("payment_method"), "payment_id": order.get("payment_id"),
             "issued_at": now, "immutable": True,
         }
@@ -3347,7 +3429,7 @@ async def download_order_invoice(order_id: str, user: Dict[str, Any] = Depends(g
     for invoice in invoices:
         rows = "".join(f"<tr><td>{html.escape(str(item.get('name','')))}</td><td>{html.escape(str(item.get('size','—')))}</td><td>{item['quantity']}</td><td>₹{float(item['price']):.2f}</td><td>₹{float(item['price']) * int(item['quantity']):.2f}</td></tr>" for item in invoice["items"])
         seller = invoice["seller"]; address = invoice["billing_address"]
-        sections.append(f"<section><h1>Tax Invoice {html.escape(invoice['invoice_number'])}</h1><p><b>Supplier:</b> {html.escape(seller['business_name'])}<br><b>GSTIN:</b> {html.escape(str(seller.get('gst_number') or 'Unregistered'))}<br>{html.escape(str(seller.get('address') or ''))}, {html.escape(str(seller.get('state') or ''))}</p><p><b>Order:</b> {html.escape(order_id)}<br><b>Issued:</b> {invoice['issued_at'].strftime('%d %b %Y')}<br><b>Bill to:</b> {html.escape(str(address.get('name','')))}, {html.escape(str(address.get('address_line') or address.get('address_line1','')))}, {html.escape(str(address.get('city','')))} {html.escape(str(address.get('pincode','')))}</p><table><thead><tr><th>Item</th><th>Size</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>{rows}</tbody></table><div class='totals'>Subtotal ₹{invoice['subtotal']:.2f}<br>Discount −₹{invoice['discount_amount']:.2f}<br>Taxable ₹{invoice['taxable_amount']:.2f}<br>CGST ₹{invoice['cgst_amount']:.2f} · SGST ₹{invoice['sgst_amount']:.2f} · IGST ₹{invoice['igst_amount']:.2f}<br>Shipping ₹{invoice['shipping_charge']:.2f}<br><b>Total ₹{invoice['total_amount']:.2f}</b><br><small>GST is {'included in item prices' if invoice['tax_inclusive'] else 'charged additionally'}.</small></div></section>")
+        sections.append(f"<section><h1>Tax Invoice {html.escape(invoice['invoice_number'])}</h1><p><b>Supplier:</b> {html.escape(seller['business_name'])}<br><b>GSTIN:</b> {html.escape(str(seller.get('gst_number') or 'Unregistered'))}<br>{html.escape(str(seller.get('address') or ''))}, {html.escape(str(seller.get('state') or ''))}</p><p><b>Order:</b> {html.escape(order_id)}<br><b>Issued:</b> {invoice['issued_at'].strftime('%d %b %Y')}<br><b>Bill to:</b> {html.escape(str(address.get('name','')))}, {html.escape(str(address.get('address_line') or address.get('address_line1','')))}, {html.escape(str(address.get('city','')))} {html.escape(str(address.get('pincode','')))}</p><table><thead><tr><th>Item</th><th>Size</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>{rows}</tbody></table><div class='totals'>Subtotal ₹{invoice['subtotal']:.2f}<br>Discount −₹{invoice['discount_amount']:.2f}<br>Taxable ₹{invoice['taxable_amount']:.2f}<br>CGST ₹{invoice['cgst_amount']:.2f} · SGST ₹{invoice['sgst_amount']:.2f} · IGST ₹{invoice['igst_amount']:.2f}<br>Shipping ₹{invoice['shipping_charge']:.2f}<br>Gift wrap ₹{invoice.get('gift_wrap_charge', 0):.2f}<br>Sticker ₹{invoice.get('sticker_charge', 0):.2f}<br><b>Total ₹{invoice['total_amount']:.2f}</b><br><small>GST is {'included in item prices' if invoice['tax_inclusive'] else 'charged additionally'}.</small></div></section>")
     document = f"<!doctype html><html><head><meta charset='utf-8'><title>Perfurm invoice {html.escape(order_id)}</title><style>body{{font:14px Arial;color:#292524;margin:32px}}section{{max-width:900px;margin:0 auto 48px;page-break-after:always}}h1{{font-family:Georgia;color:#6f3b49}}table{{width:100%;border-collapse:collapse;margin:24px 0}}th,td{{padding:10px;border:1px solid #d6d3d1;text-align:left}}.totals{{margin-left:auto;max-width:360px;text-align:right;line-height:1.8}}@media print{{body{{margin:0}}}}</style></head><body>{''.join(sections)}</body></html>"
     return Response(content=document, media_type="text/html", headers={"Content-Disposition": f'attachment; filename="perfurm-invoice-{order_id}.html"', "Cache-Control": "private, no-store"})
 
@@ -5321,6 +5403,7 @@ async def integration_status(user: Dict[str, Any] = Depends(require_role([UserRo
         "shipping_failures": await db.shipping_labels.count_documents({"status": {"$in": ["failed", "error"]}}),
         "notification_failures": await db.notification_jobs.count_documents({"status": {"$in": ["blocked_configuration", "dead"]}}),
         "low_stock_variants": await db.variant_inventory.count_documents({"available_quantity": {"$lte": 5}}),
+        "payment_reconciliation_required": await db.orders.count_documents({"payment_status": "captured_reconciliation_required"}),
     }
     return {
         "environment": APP_ENV,
@@ -5349,14 +5432,14 @@ async def confirm_demo_payment(payload: DemoPaymentConfirm, user: Dict[str, Any]
         raise HTTPException(status_code=404, detail="Order not found")
     now = datetime.now(timezone.utc)
     demo_payment_id = f"demo_pay_{uuid.uuid4().hex[:16]}"
-    updated = await mark_order_paid_and_finalize(order, {"id": order["id"], "customer_id": user["id"], "payment_status": {"$ne": "paid"}}, {
+    outcome = await mark_order_paid_and_finalize(order, {"id": order["id"], "customer_id": user["id"], "payment_status": {"$ne": "paid"}}, {
         "$set": {"payment_status": "paid", "status": OrderStatus.CONFIRMED.value, "payment_id": demo_payment_id, "paid_at": now},
         "$push": {
             "payment_history": {"status": "paid", "at": now, "provider": "demo", "payment_id": demo_payment_id, "source": "demo_checkout"},
             "status_history": {"status": OrderStatus.CONFIRMED.value, "at": now, "actor_id": user["id"], "source": "demo_payment"},
         },
     })
-    return {"status": "success", "order_id": order["id"], "payment_id": demo_payment_id, "already_paid": not updated}
+    return {"status": "success", "order_id": order["id"], "payment_id": demo_payment_id, "already_paid": outcome == "duplicate", "reconciliation_required": outcome == "reconciliation_required"}
 
 @api_router.post("/payments/create-order")
 async def create_payment_order(
@@ -5416,8 +5499,9 @@ async def create_payment_order(
             "key_id": os.environ.get('RAZORPAY_KEY_ID'),
             "internal_order_id": payment_data.order_id
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create payment order: {str(e)}")
+    except Exception:
+        logger.exception("Provider order creation failed for internal order %s", payment_data.order_id)
+        raise HTTPException(status_code=502, detail="Payment provider order could not be created")
 
 @api_router.post("/payments/verify")
 async def verify_payment(
@@ -5448,7 +5532,7 @@ async def verify_payment(
         })
         
         # Payment state and reserved-stock finalization commit together on real MongoDB.
-        updated = await mark_order_paid_and_finalize(
+        outcome = await mark_order_paid_and_finalize(
             order,
             {
                 "id": verification_data.internal_order_id,
@@ -5476,8 +5560,10 @@ async def verify_payment(
                 },
             },
         )
-        if not updated:
+        if outcome == "duplicate":
             return {"status": "success", "message": "Payment already verified"}
+        if outcome == "reconciliation_required":
+            return {"status": "reconciliation_required", "message": "Payment was captured and is under inventory review"}
         
         return {"status": "success", "message": "Payment verified successfully"}
         
@@ -5499,6 +5585,7 @@ async def razorpay_webhook(request: Request):
         webhook_secret.encode("utf-8"), raw_body, hashlib.sha256
     ).hexdigest()
     if not received_signature or not hmac.compare_digest(received_signature, expected_signature):
+        request_metrics["webhook_verification_failures"] = request_metrics.get("webhook_verification_failures", 0) + 1
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
     try:
         payload = json.loads(raw_body)
@@ -5509,9 +5596,6 @@ async def razorpay_webhook(request: Request):
     payment_entity = payload.get("payload", {}).get("payment", {}).get("entity", {})
     refund_entity = payload.get("payload", {}).get("refund", {}).get("entity", {})
     event_id = request.headers.get("X-Razorpay-Event-Id") or hashlib.sha256(raw_body).hexdigest()
-    if await db.payment_events.find_one({"event_id": event_id}):
-        return {"status": "duplicate"}
-
     provider_order_id = payment_entity.get("order_id")
     order = await db.orders.find_one({"razorpay_order_id": provider_order_id}) if provider_order_id else None
     if not order and refund_entity.get("payment_id"):
@@ -5519,17 +5603,25 @@ async def razorpay_webhook(request: Request):
     event_document = {
         "event_id": event_id, "provider": "razorpay", "event": event_name,
         "provider_order_id": provider_order_id, "received_at": datetime.now(timezone.utc),
-        "processed": False,
+        "provider_payment_id": payment_entity.get("id") or refund_entity.get("payment_id"),
+        "provider_refund_id": refund_entity.get("id"),
+        "amount_paise": payment_entity.get("amount") or refund_entity.get("amount"),
+        "processed": False, "status": "received", "attempts": 1,
     }
-    await db.payment_events.insert_one(event_document)
+    try:
+        await db.payment_events.insert_one(event_document)
+    except DuplicateKeyError:
+        request_metrics["duplicate_webhooks"] = request_metrics.get("duplicate_webhooks", 0) + 1
+        return {"status": "duplicate"}
     if not order:
-        await db.payment_events.update_one({"event_id": event_id}, {"$set": {"processed": True, "result": "order_not_found"}})
-        return {"status": "accepted"}
+        await db.payment_events.update_one({"event_id": event_id}, {"$set": {"status": "reconciliation_required", "result": "order_not_found"}})
+        request_metrics["payment_reconciliation_failures"] = request_metrics.get("payment_reconciliation_failures", 0) + 1
+        return {"status": "accepted", "reconciliation": "required"}
 
     now = datetime.now(timezone.utc)
     if event_name in {"payment.captured", "order.paid"}:
         payment_id = payment_entity.get("id")
-        await mark_order_paid_and_finalize(
+        capture_outcome = await mark_order_paid_and_finalize(
             order,
             {"id": order["id"], "payment_status": {"$ne": "paid"}},
             {
@@ -5540,6 +5632,8 @@ async def razorpay_webhook(request: Request):
                 },
             },
         )
+        if capture_outcome == "reconciliation_required":
+            request_metrics["payment_reconciliation_failures"] = request_metrics.get("payment_reconciliation_failures", 0) + 1
     elif event_name == "payment.failed":
         await mark_order_failed_and_release(
             order,
@@ -5578,8 +5672,33 @@ async def razorpay_webhook(request: Request):
             update["$push"]["status_history"] = {"status": OrderStatus.REFUNDED.value, "at": now, "source": "payment_webhook"}
         await db.orders.update_one({"id": order["id"]}, update)
 
-    await db.payment_events.update_one({"event_id": event_id}, {"$set": {"processed": True, "processed_at": now, "order_id": order["id"]}})
+    event_result = locals().get("capture_outcome", "processed")
+    await db.payment_events.update_one({"event_id": event_id}, {"$set": {
+        "processed": event_result != "reconciliation_required", "processed_at": now,
+        "status": "reconciliation_required" if event_result == "reconciliation_required" else "processed",
+        "result": event_result, "order_id": order["id"],
+    }})
     return {"status": "accepted"}
+
+
+@api_router.get("/admin/payments/reconciliation")
+async def payment_reconciliation_summary(user: Dict[str, Any] = Depends(require_super_admin)):
+    """Safe local mismatch queue; provider credentials are never returned."""
+    orders = await db.orders.find(
+        {"$or": [
+            {"payment_status": "captured_reconciliation_required"},
+            {"reconciliation_state": {"$in": ["captured_inventory_unavailable", "inventory_commit_failed"]}},
+        ]},
+        {"_id": 0, "id": 1, "customer_id": 1, "total_amount": 1, "payment_status": 1,
+         "payment_id": 1, "razorpay_order_id": 1, "reservation_status": 1,
+         "reconciliation_state": 1, "reconciliation_required_at": 1, "created_at": 1},
+    ).sort("reconciliation_required_at", -1).limit(200).to_list(200)
+    events = await db.payment_events.find(
+        {"status": "reconciliation_required"},
+        {"_id": 0, "event_id": 1, "event": 1, "provider_order_id": 1,
+         "provider_payment_id": 1, "result": 1, "received_at": 1, "attempts": 1},
+    ).sort("received_at", -1).limit(200).to_list(200)
+    return {"summary": {"orders": len(orders), "webhook_events": len(events), "total": len(orders) + len(events)}, "orders": orders, "webhook_events": events}
 
 @api_router.get("/payments/status/{order_id}")
 async def get_payment_status(
@@ -6274,7 +6393,7 @@ async def get_platform_settings():
         if hasattr(settings["updated_at"], "isoformat"):
             settings["updated_at"] = settings["updated_at"].isoformat()
     
-    return settings
+    return {**PlatformSettings().model_dump(), **settings}
 
 @api_router.put("/admin/platform-settings")
 async def update_platform_settings(
@@ -6287,7 +6406,7 @@ async def update_platform_settings(
     
     await db.platform_settings.update_one(
         {"id": "platform_settings"},
-        {"$set": update_data},
+        {"$set": update_data, "$setOnInsert": {"id": "platform_settings"}},
         upsert=True
     )
     
@@ -6298,7 +6417,7 @@ async def update_platform_settings(
         if hasattr(settings["updated_at"], "isoformat"):
             settings["updated_at"] = settings["updated_at"].isoformat()
     
-    return settings
+    return {**PlatformSettings().model_dump(), **settings}
 
 # ============== SELLER PAYOUT APIS ==============
 @api_router.get("/admin/seller-payouts")
@@ -6994,8 +7113,29 @@ async def shutdown_db_client():
 @app.on_event("startup")
 async def startup_db():
     global reservation_reaper_task, notification_outbox_task
+    if not USE_MOCK_DB:
+        try:
+            await db.command("ping")
+            if APP_ENV in {"staging", "production"}:
+                identity = await db.system_metadata.find_one({"id": "environment_identity"})
+                if identity and identity.get("environment") != APP_ENV:
+                    raise RuntimeError("MongoDB database is already assigned to a different environment")
+                await db.system_metadata.update_one(
+                    {"id": "environment_identity"},
+                    {"$setOnInsert": {"id": "environment_identity", "environment": APP_ENV, "created_at": datetime.now(timezone.utc)}},
+                    upsert=True,
+                )
+        except RuntimeError:
+            raise
+        except Exception:
+            logger.error("MongoDB startup qualification failed")
+            raise RuntimeError("MongoDB startup qualification failed") from None
     # Create indexes
     await db.users.create_index("email", unique=True)
+    if USE_MOCK_DB:
+        await db.users.create_index("phone")
+    else:
+        await db.users.create_index("phone", unique=True, partialFilterExpression={"phone": {"$type": "string"}})
     await db.products.create_index("seller_id")
     await db.products.create_index("sku", unique=True)
     if USE_MOCK_DB:
@@ -7018,7 +7158,14 @@ async def startup_db():
     await db.pincode_rules.create_index("pincode", unique=True)
     await db.orders.create_index("customer_id")
     await db.orders.create_index([("customer_id", 1), ("created_at", -1)])
-    await db.orders.create_index("razorpay_order_id", sparse=True)
+    await db.orders.create_index([("status", 1), ("created_at", -1)])
+    await db.orders.create_index([("reservation_status", 1), ("reservation_expires_at", 1)])
+    if USE_MOCK_DB:
+        await db.orders.create_index("razorpay_order_id")
+        await db.orders.create_index("payment_id")
+    else:
+        await db.orders.create_index("razorpay_order_id", unique=True, partialFilterExpression={"razorpay_order_id": {"$type": "string"}})
+        await db.orders.create_index("payment_id", unique=True, partialFilterExpression={"payment_id": {"$type": "string"}})
     await db.coupons.create_index("code", unique=True)
     await db.coupon_customer_usage.create_index([("coupon_id", 1), ("customer_id", 1)], unique=True)
     await db.customer_credits.create_index([("customer_id", 1), ("status", 1), ("created_at", -1)])
@@ -7035,7 +7182,10 @@ async def startup_db():
             partialFilterExpression={"idempotency_key": {"$type": "string"}},
         )
     await db.payment_events.create_index("event_id", unique=True)
+    await db.payment_events.create_index([("status", 1), ("received_at", -1)])
+    await db.payment_events.create_index("provider_payment_id")
     await db.refunds.create_index("provider_refund_id", unique=True, sparse=True)
+    await db.refunds.create_index([("payment_id", 1), ("status", 1)])
     await db.reviews.create_index("order_item_key", unique=True, sparse=True)
     await db.reviews.create_index([("moderation_status", 1), ("created_at", -1)])
     await db.reviews.create_index([("product_id", 1), ("moderation_status", 1), ("created_at", -1)])
@@ -7135,7 +7285,7 @@ async def startup_db():
         for sku, (family, target, concentration) in preview_facets.items():
             preview_product = await db.products.find_one({"sku": sku}, {"_id": 0, "name": 1})
             await db.products.update_one({"sku": sku}, {"$set": {
-                "brand": "Perfurm", "fragrance_family": family, "target_category": target,
+                "brand": "RAW", "fragrance_family": family, "target_category": target,
                 "slug": re.sub(r"[^a-z0-9]+", "-", preview_product["name"].lower()).strip("-"),
                 "concentration": concentration, "is_new_arrival": sku in {"PFM007", "PFM008", "PFM011"},
                 "is_coming_soon": sku in {"PFM015", "PFM016"},

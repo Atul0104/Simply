@@ -1,5 +1,7 @@
 # Testing strategy
 
+Commerce consistency coverage includes capture, failed-payment release, refund idempotency, signed/idempotent webhooks, inventory rollback and capture after reservation expiry. Real staging must also run `backend/scripts/qualify_transactions.py`, Razorpay test-mode flows, concurrency tests and the backup/restore drill.
+
 ## Automated gates
 
 - Backend: pytest unit/integration tests for auth, RBAC/IDOR, catalogue, variants, concurrency-safe inventory, coupons, payments/webhooks, shipping, returns, reviews, privacy and invoices.

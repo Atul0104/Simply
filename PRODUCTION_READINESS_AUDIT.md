@@ -1,5 +1,9 @@
 # Perfurm production-readiness audit
 
+## Phase 1 commerce qualification update
+
+Code enforces environment-bound databases, startup connectivity checks, pooled MongoDB connections, critical indexes, explicit reservation timestamps, and captured-payment reconciliation. A verified late capture cannot commit expired inventory. Real Atlas transactions, Razorpay staging flows and backup restore remain `CONFIGURATION_REQUIRED` until credentials are supplied and drills are recorded.
+
 Last reviewed: 7 August 2026. This is the release-owner view; detailed implementation history remains in `PRODUCTION_AUDIT.md`.
 
 ## Architecture

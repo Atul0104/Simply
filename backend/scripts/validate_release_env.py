@@ -22,6 +22,7 @@ def main() -> int:
     args = parser.parse_args(); env = read_env(args.env_file); errors: list[str] = []
     mode = env.get("APP_ENV")
     if mode not in {"staging", "production"}: errors.append("APP_ENV must be staging or production")
+    if env.get("DATABASE_ENVIRONMENT") != mode: errors.append("DATABASE_ENVIRONMENT must exactly match APP_ENV")
     if env.get("USE_MOCK_DB", "").lower() != "false": errors.append("USE_MOCK_DB must be false")
     if env.get("ENABLE_DEMO_OTP", "").lower() != "false": errors.append("ENABLE_DEMO_OTP must be false")
     if env.get("COOKIE_SECURE", "").lower() != "true": errors.append("COOKIE_SECURE must be true")
@@ -57,6 +58,7 @@ def main() -> int:
         if value and mode == "production" and urlparse(value).scheme != "https": errors.append(f"{key} must use HTTPS in production")
     if env.get("SMTP_USE_SSL", "false").lower() == "true" and env.get("SMTP_USE_TLS", "false").lower() == "true": errors.append("Choose SMTP_USE_SSL or SMTP_USE_TLS, not both")
     if args.require_commerce_providers:
+        if env.get("ONLINE_PAYMENTS_ENABLED", "").lower() != "true": errors.append("ONLINE_PAYMENTS_ENABLED must be true for commerce-provider qualification")
         for key in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", "SHIPPING_PROVIDER_API_URL", "SHIPPING_PROVIDER_API_TOKEN", "SHIPPING_PROVIDER_WEBHOOK_SECRET"):
             if not env.get(key): errors.append(f"{key} is required for commerce-provider qualification")
     provider_groups = {

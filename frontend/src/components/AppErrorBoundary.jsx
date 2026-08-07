@@ -22,7 +22,7 @@ export default class AppErrorBoundary extends Component {
           <AlertTriangle className="mx-auto h-10 w-10 text-[#7d4956]" aria-hidden="true" />
           <h1 className="display-serif mt-4 text-2xl font-semibold">We could not display this page</h1>
           <p className="mt-2 text-sm text-stone-600">Your account and order data are safe. Reload the application to try again.</p>
-          <Button className="mt-6" onClick={() => window.location.reload()}>Reload Perfurm</Button>
+          <Button className="mt-6" onClick={() => window.location.reload()}>Reload RAW</Button>
         </div>
       </main>
     );

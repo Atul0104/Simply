@@ -160,7 +160,7 @@ export default function CategoryPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Seo title={category === 'all' ? 'All fragrances' : category} description={`Shop ${category === 'all' ? 'perfume and fragrance' : category} at Perfurm.`} canonicalPath={`/customer/category/${encodeURIComponent(category)}`} />
+      <Seo title={category === 'all' ? 'All fragrances' : category} description={`Shop ${category === 'all' ? 'perfume and fragrance' : category} at RAW.`} canonicalPath={`/customer/category/${encodeURIComponent(category)}`} />
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-3 sm:py-4">

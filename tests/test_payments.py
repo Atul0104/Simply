@@ -186,3 +186,37 @@ def test_failed_payment_webhook_releases_reserved_inventory():
             assert after == before
     finally:
         server.razorpay_client = original_client
+
+
+def test_captured_payment_after_reservation_expiry_enters_reconciliation():
+    suffix = uuid.uuid4().hex[:10]
+    provider_order_id = f"order_late_{suffix}"
+    original_client = server.razorpay_client
+    server.razorpay_client = FakeRazorpay(provider_order_id, f"rfnd_unused_{suffix}")
+    try:
+        with TestClient(server.app) as client:
+            customer = client.post("/api/auth/register", json={
+                "email": f"late-payment-{suffix}@example.com", "password": "Secure123!",
+                "name": "Late Payment Buyer", "role": "customer",
+            }).json()
+            order = client.post("/api/orders", headers=bearer(customer["access_token"], f"late-order-{suffix}"), json={
+                "items": [{"product_id": next(item for item in client.get("/api/products").json() if not item.get("variants") and item["seller_id"] == "preview-atelier")["id"], "quantity": 1}],
+                "payment_method": "online", "total_amount": 1,
+                "shipping_address": {"address": "Test address", "pincode": "400001"},
+            }).json()
+            client.post("/api/payments/create-order", headers=bearer(customer["access_token"]), json={"amount": 1, "order_id": order["id"]})
+            client.portal.call(server.db.orders.update_one, {"id": order["id"]}, {"$set": {"reservation_expires_at": server.datetime.now(server.timezone.utc) - server.timedelta(minutes=1)}})
+            admin = client.post("/api/auth/login", json={"email": "admin@perfurm.com", "password": "admin123"}).json()
+            released = client.post("/api/admin/orders/release-expired-reservations", headers=bearer(admin["access_token"]))
+            assert released.json()["released"] >= 1
+
+            response = signed_webhook(client, {"event": "payment.captured", "payload": {"payment": {"entity": {"id": f"pay_late_{suffix}", "order_id": provider_order_id}}}}, f"late-event-{suffix}")
+            assert response.status_code == 200
+            order_after = client.get(f"/api/orders/{order['id']}", headers=bearer(customer["access_token"])).json()
+            assert order_after["payment_status"] == "captured_reconciliation_required"
+            assert order_after["reservation_status"] == "released"
+            queue = client.get("/api/admin/payments/reconciliation", headers=bearer(admin["access_token"]))
+            assert queue.status_code == 200
+            assert any(item["id"] == order["id"] for item in queue.json()["orders"])
+    finally:
+        server.razorpay_client = original_client

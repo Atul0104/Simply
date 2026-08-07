@@ -45,9 +45,13 @@ env/
 *.log
 *.pid
 *.seed
+*.tmp
+*.temp
 dump.rdb
 .preview-logs/
 cloudflared-preview*
+.cloudflared/
+cert.pem
 playwright-report/
 test-results/
 frontend/product-*.png
@@ -72,6 +76,10 @@ Desktop.ini
 
 # Deployment state
 .vercel/
+.wrangler/
+
+# Machine-local overrides
+*.local
 
 # Archives and generated packages
 *.zip

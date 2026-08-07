@@ -142,7 +142,7 @@ export default function HeroBannerManagement() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold">Hero Banner Management</h1>
-            <p className="text-gray-500">Manage ordered image/video stories used by the homepage hero and Perfurm Edit</p>
+            <p className="text-gray-500">Manage ordered image/video stories used by the homepage hero and RAW Edit</p>
           </div>
           <Button onClick={() => { resetForm(); setShowDialog(true); }} className="gap-2">
             <Plus className="w-4 h-4" /> Add Banner

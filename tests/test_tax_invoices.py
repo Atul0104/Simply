@@ -94,3 +94,33 @@ def test_interstate_quote_uses_igst_and_platform_tax_validation_is_bounded():
         admin = client.post("/api/auth/login", json={"email": "admin@perfurm.com", "password": "admin123"}).json()
         invalid = client.put("/api/admin/platform-settings", headers=bearer(admin["access_token"]), json={"gst_percentage": 101})
         assert invalid.status_code == 422
+
+
+def test_checkout_addons_use_admin_prices_and_are_persisted_in_total():
+    suffix = uuid.uuid4().hex[:10]
+    with TestClient(server.app) as client:
+        admin = client.post("/api/auth/login", json={"email": "admin@perfurm.com", "password": "admin123"}).json()
+        configured = client.put("/api/admin/platform-settings", headers=bearer(admin["access_token"]), json={
+            "gift_wrap_enabled": True, "gift_wrap_price": 75,
+            "sticker_enabled": True, "sticker_price": 25,
+        })
+        assert configured.status_code == 200
+        customer = client.post("/api/auth/register", json={
+            "email": f"gift-{suffix}@example.com", "password": "Secure123!", "name": "Gift Buyer", "role": "customer",
+        }).json()
+        product = next(item for item in client.get("/api/products").json() if not item.get("variants") and item["seller_id"] == "preview-atelier")
+        items = [{"product_id": product["id"], "quantity": 1}]
+        base = client.post("/api/checkout/quote", headers=bearer(customer["access_token"]), json={"items": items, "pincode": "400001", "state": "Maharashtra"}).json()
+        gift = client.post("/api/checkout/quote", headers=bearer(customer["access_token"]), json={
+            "items": items, "pincode": "400001", "state": "Maharashtra", "gift_wrap_selected": True, "sticker_selected": True,
+        }).json()
+        assert gift["gift_wrap_charge"] == 75
+        assert gift["sticker_charge"] == 25
+        assert gift["total_amount"] == base["total_amount"] + 100
+        order = client.post("/api/orders", headers=bearer(customer["access_token"], f"gift-order-{suffix}"), json={
+            "items": items, "total_amount": 1, "payment_method": "cod", "gift_wrap_selected": True, "sticker_selected": True,
+            "shipping_address": {"name": "Gift Buyer", "address": "1 Test Road", "city": "Mumbai", "state": "Maharashtra", "pincode": "400001"},
+        })
+        assert order.status_code == 200, order.text
+        assert order.json()["total_amount"] == gift["total_amount"]
+        assert order.json()["gift_wrap_selected"] is True and order.json()["sticker_selected"] is True

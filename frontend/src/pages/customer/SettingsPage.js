@@ -306,7 +306,7 @@ export default function SettingsPage() {
 
         {/* Security */}
         <Card>
-          <CardHeader><CardTitle>Privacy & personalization</CardTitle><CardDescription>Control how Perfurm tailors your storefront.</CardDescription></CardHeader>
+          <CardHeader><CardTitle>Privacy & personalization</CardTitle><CardDescription>Control how RAW tailors your storefront.</CardDescription></CardHeader>
           <CardContent className="space-y-4">
             {[
               ['personalized_recommendations', 'Personalized recommendations', 'Use your browsing and purchase history to improve suggestions'],

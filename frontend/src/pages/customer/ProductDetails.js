@@ -245,7 +245,7 @@ export default function ProductDetails() {
         schema={{
           '@context': 'https://schema.org', '@type': 'Product', name: product.name,
           description: product.short_description || product.description, image: product.images,
-          sku: product.sku, brand: { '@type': 'Brand', name: product.brand || 'Perfurm' },
+          sku: product.sku, brand: { '@type': 'Brand', name: 'RAW' },
           offers: { '@type': 'Offer', priceCurrency: 'INR', price: displayPrice, availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', url: `${window.location.origin}/customer/product/${product.slug || product.id}` },
           ...(product.review_count > 0 ? { aggregateRating: { '@type': 'AggregateRating', ratingValue: product.average_rating, reviewCount: product.review_count } } : {}),
         }}
@@ -317,7 +317,7 @@ export default function ProductDetails() {
           {/* Product Details Section */}
           <div className="min-w-0 space-y-5 lg:pt-2">
             <div>
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.24em] text-[#7d4956]">{product.brand || 'Perfurm'} · {scentFamily}</p>
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[.24em] text-[#7d4956]">RAW · {scentFamily}</p>
               <h1 className="display-serif break-words text-3xl font-semibold leading-[1.05] sm:text-5xl">{product.name}</h1>
               <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600">{product.short_description || product.description}</p>
             </div>
@@ -527,7 +527,7 @@ export default function ProductDetails() {
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-green-600 flex-shrink-0" />
-                      <span>Authenticity checked and packed with care by Perfurm.</span>
+                      <span>Authenticity checked and packed with care by RAW.</span>
                     </li>
                     <li className="flex items-start gap-2">
                       <Check className="w-5 h-5 text-green-600 flex-shrink-0" />

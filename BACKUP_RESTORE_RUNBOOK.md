@@ -1,5 +1,7 @@
 # Backup and restore runbook
 
+> Phase 1 status: `CONFIGURATION_REQUIRED`. No Atlas credentials or eligible backup target were available, so no restore success is claimed. Before production, run this drill on staging and record snapshot time, restore target, collection counts and approver. Confirm the Atlas tier supports the required cloud backup/point-in-time restore capability.
+
 ## Backup
 
 Use MongoDB Atlas continuous backup or scheduled snapshots for production. Before migrations/releases create an on-demand snapshot and record cluster, timestamp, encryption and retention. Exported backups must be encrypted, access-controlled and excluded from Git.
